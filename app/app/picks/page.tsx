@@ -1,51 +1,38 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { GroupPicks } from '@/components/picks/GroupCard';
 import GroupOverview from '@/components/picks/GroupOverview';
 import GroupDetailModal from '@/components/picks/GroupDetailModal';
 import KnockoutBracket from '@/components/picks/KnockoutBracket';
-import { GROUPS, ALL_TEAMS } from '@/lib/worldcup-data';
+import { GROUPS, GROUP_MATCHES, ALL_TEAMS } from '@/lib/worldcup-data';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-interface GroupPicksMap {
-  [group: string]: GroupPicks;
-}
-
-interface BracketPicksMap {
-  [key: string]: string; // "round-slot" -> team
-}
-
 export default function PicksPage() {
-  const [groupPicks, setGroupPicks] = useState<GroupPicksMap>({});
-  const [bracketPicks, setBracketPicks] = useState<BracketPicksMap>({});
+  // matchId -> "home"|"draw"|"away"
+  const [matchPicks, setMatchPicks] = useState<Record<string, string>>({});
+  // "round-slot" -> team
+  const [bracketPicks, setBracketPicks] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
-  // Debounce timers per group / bracket key
-  const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const bracketTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ----------------------------------------------------------------
-  // Initial data fetch
-  // ----------------------------------------------------------------
+  // Load saved picks on mount
   const fetchPicks = useCallback(async () => {
     try {
       const [groupRes, bracketRes] = await Promise.all([
         fetch('/api/picks/groups'),
         fetch('/api/picks/bracket'),
       ]);
-
       const groupData = await groupRes.json();
-      if (groupData.picks) {
-        setGroupPicks(groupData.picks as GroupPicksMap);
-      }
+      if (groupData.picks) setMatchPicks(groupData.picks);
 
       const bracketData = await bracketRes.json();
       if (bracketData.picks) {
-        const map: BracketPicksMap = {};
+        const map: Record<string, string> = {};
         for (const p of bracketData.picks as { round: string; slot: number; team: string }[]) {
           map[`${p.round}-${p.slot}`] = p.team;
         }
@@ -61,92 +48,45 @@ export default function PicksPage() {
   useEffect(() => {
     fetchPicks();
     return () => {
-      // Cleanup debounce timers on unmount
-      saveTimers.current.forEach((t) => clearTimeout(t));
+      bracketTimers.current.forEach((t) => clearTimeout(t));
       if (statusTimer.current) clearTimeout(statusTimer.current);
     };
   }, [fetchPicks]);
 
-  // ----------------------------------------------------------------
-  // Toast helper
-  // ----------------------------------------------------------------
   function showSaved() {
     setSaveStatus('saved');
     if (statusTimer.current) clearTimeout(statusTimer.current);
     statusTimer.current = setTimeout(() => setSaveStatus('idle'), 2500);
   }
-
   function showError() {
     setSaveStatus('error');
     if (statusTimer.current) clearTimeout(statusTimer.current);
     statusTimer.current = setTimeout(() => setSaveStatus('idle'), 3000);
   }
 
-  // ----------------------------------------------------------------
-  // Group pick save (debounced 400ms)
-  // ----------------------------------------------------------------
-  function handleGroupChange(groupId: string, picks: GroupPicks) {
-    setGroupPicks((prev) => ({ ...prev, [groupId]: picks }));
-
-    const timerKey = `group-${groupId}`;
-    const existing = saveTimers.current.get(timerKey);
-    if (existing) clearTimeout(existing);
-
-    setSaveStatus('saving');
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch('/api/picks/groups', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ group: groupId, ...picks }),
-        });
-        if (res.ok) {
-          showSaved();
-        } else {
-          showError();
-        }
-      } catch {
-        showError();
-      }
-      saveTimers.current.delete(timerKey);
-    }, 400);
-
-    saveTimers.current.set(timerKey, t);
-  }
-
-  // ----------------------------------------------------------------
-  // Group pick save from modal (immediate save)
-  // ----------------------------------------------------------------
-  async function handleGroupSave(groupId: string, picks: GroupPicks) {
-    setGroupPicks((prev) => ({ ...prev, [groupId]: picks }));
+  // Save a single match pick immediately on click
+  async function handleMatchPickChange(matchId: string, pick: string) {
+    setMatchPicks((prev) => ({ ...prev, [matchId]: pick }));
     setSaveStatus('saving');
     try {
       const res = await fetch('/api/picks/groups', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ group: groupId, ...picks }),
+        body: JSON.stringify({ matchId, pick }),
       });
-      if (res.ok) {
-        showSaved();
-      } else {
-        showError();
-      }
+      res.ok ? showSaved() : showError();
     } catch {
       showError();
     }
   }
 
-  // ----------------------------------------------------------------
-  // Bracket pick save (debounced 400ms per slot)
-  // ----------------------------------------------------------------
+  // Bracket picks debounced 400ms
   function handleBracketChange(round: string, slot: number, team: string) {
     const key = `${round}-${slot}`;
     setBracketPicks((prev) => ({ ...prev, [key]: team }));
-
     const timerKey = `bracket-${key}`;
-    const existing = saveTimers.current.get(timerKey);
+    const existing = bracketTimers.current.get(timerKey);
     if (existing) clearTimeout(existing);
-
     setSaveStatus('saving');
     const t = setTimeout(async () => {
       try {
@@ -155,104 +95,79 @@ export default function PicksPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ round, slot, team }),
         });
-        if (res.ok) {
-          showSaved();
-        } else {
-          showError();
-        }
-      } catch {
-        showError();
-      }
-      saveTimers.current.delete(timerKey);
+        res.ok ? showSaved() : showError();
+      } catch { showError(); }
+      bracketTimers.current.delete(timerKey);
     }, 400);
-
-    saveTimers.current.set(timerKey, t);
+    bracketTimers.current.set(timerKey, t);
   }
 
-  // ----------------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------------
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-wc-green-300 text-lg animate-pulse">Loading picks...</div>
+        <div className="text-green-300 text-lg animate-pulse">Loading picks...</div>
       </div>
     );
   }
 
-  const groupsCompleted = GROUPS.filter((g) => !!groupPicks[g.id]).length;
+  const totalMatches = GROUP_MATCHES.length;
+  const pickedMatches = Object.keys(matchPicks).length;
   const bracketSlots = Object.keys(bracketPicks).length;
 
   return (
     <div className="space-y-8 pb-12">
-      {/* ---- Page Header ---- */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">My Picks</h1>
-          <p className="text-wc-green-400 text-sm mt-1">
-            {groupsCompleted}/12 groups ranked &middot; {bracketSlots} bracket slots filled
+          <p className="text-green-400 text-sm mt-1">
+            {pickedMatches}/{totalMatches} group matches · {bracketSlots} bracket slots
           </p>
         </div>
-
-        {/* Save status toast */}
-        <div className="flex items-center gap-2">
-          {saveStatus === 'saving' && (
-            <span className="text-sm text-wc-green-300 animate-pulse">Saving...</span>
-          )}
-          {saveStatus === 'saved' && (
-            <span className="text-sm text-green-400 font-medium">Saved ✓</span>
-          )}
-          {saveStatus === 'error' && (
-            <span className="text-sm text-red-400 font-medium">Save failed</span>
-          )}
+        <div className="flex items-center gap-2 text-sm">
+          {saveStatus === 'saving' && <span className="text-green-300 animate-pulse">Saving...</span>}
+          {saveStatus === 'saved'  && <span className="text-green-400 font-medium">Saved ✓</span>}
+          {saveStatus === 'error'  && <span className="text-red-400 font-medium">Save failed</span>}
         </div>
       </div>
 
-      {/* ================================================================
-          SECTION 1 — GROUP STAGE
-          ================================================================ */}
+      {/* Group Stage */}
       <section>
         <div className="mb-4">
-          <h2 className="text-xl font-bold text-wc-gold-400">Group Stage</h2>
-          <p className="text-wc-green-400 text-sm mt-1">
-            Click a group to rank teams 1st–4th. Top 2 qualify (green Q badge).
+          <h2 className="text-xl font-bold text-yellow-400">Group Stage</h2>
+          <p className="text-green-400 text-sm mt-1">
+            Click a group to pick each match. Top 2 + 8 best 3rd-place teams advance to Round of 32.
           </p>
-          <div className="mt-2 flex flex-wrap gap-3 text-xs text-wc-green-500">
-            <span>1st correct: <span className="text-wc-gold-400 font-semibold">+4 pts</span></span>
-            <span>2nd correct: <span className="text-wc-gold-400 font-semibold">+3 pts</span></span>
-            <span>3rd correct: <span className="text-wc-gold-400 font-semibold">+2 pts</span></span>
-            <span>4th correct: <span className="text-wc-gold-400 font-semibold">+1 pt</span></span>
+          <div className="mt-2 text-xs text-green-500">
+            Correct result: <span className="text-yellow-400 font-semibold">+3 pts</span>
           </div>
         </div>
 
         <GroupOverview
           groups={GROUPS}
-          allPicks={groupPicks}
+          matchPicks={matchPicks}
           onSelectGroup={setSelectedGroup}
         />
 
         {selectedGroup && (
           <GroupDetailModal
             group={GROUPS.find((g) => g.id === selectedGroup)!}
-            picks={groupPicks[selectedGroup] ?? null}
-            onSave={(picks) => handleGroupSave(selectedGroup, picks)}
+            matchPicks={matchPicks}
+            onPickChange={handleMatchPickChange}
             onClose={() => setSelectedGroup(null)}
           />
         )}
       </section>
 
-      {/* ================================================================
-          SECTION 2 — KNOCKOUT BRACKET
-          ================================================================ */}
+      {/* Knockout Bracket */}
       <section>
         <div className="mb-4">
-          <h2 className="text-xl font-bold text-wc-gold-400">Knockout Bracket</h2>
-          <p className="text-wc-green-400 text-sm mt-1">
-            Pick the winner of each round. Select the champion at the center.
+          <h2 className="text-xl font-bold text-yellow-400">Knockout Bracket</h2>
+          <p className="text-green-400 text-sm mt-1">
+            Pick the winner of each round. R32=2pts · R16=3pts · QF=5pts · SF=8pts · Final=13pts · Champion=20pts
           </p>
         </div>
-
-        <div className="bg-wc-green-900/50 border border-wc-green-700 rounded-xl p-4">
+        <div className="bg-green-900/50 border border-green-700 rounded-xl p-4">
           <KnockoutBracket
             picks={bracketPicks}
             onChange={handleBracketChange}

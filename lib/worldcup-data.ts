@@ -1095,3 +1095,33 @@ export function getTeamMeta(name: string): TeamMeta {
 export function getFlagUrl(code: string): string {
   return `https://flagcdn.com/w40/${code}.png`;
 }
+
+// Compute approximate decimal odds from FIFA rankings.
+// Returns { home, draw, away } as decimal odds (e.g. 2.10).
+export function computeMatchOdds(
+  homeTeam: string,
+  awayTeam: string
+): { home: number; draw: number; away: number } {
+  const homeRank = getTeamMeta(homeTeam).fifaRank;
+  const awayRank = getTeamMeta(awayTeam).fifaRank;
+
+  // Rank difference: positive = home team is ranked higher (smaller number)
+  const diff = awayRank - homeRank;
+
+  // Logistic probability for each outcome
+  const k = 0.025;
+  const pHome = 1 / (1 + Math.exp(-(k * diff + 0.05)));
+  const pAway = 1 / (1 + Math.exp(k * diff + 0.05));
+  const pDraw = Math.max(0.18, 0.27 - 0.002 * Math.abs(diff));
+
+  const total = pHome + pAway + pDraw;
+
+  // Apply 8% bookmaker margin and convert to decimal odds
+  const m = 1.08;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  return {
+    home: round2(m / (pHome / total)),
+    draw: round2(m / (pDraw / total)),
+    away: round2(m / (pAway / total)),
+  };
+}
