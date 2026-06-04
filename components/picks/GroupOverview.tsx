@@ -18,7 +18,7 @@ function shortenName(name: string): string {
     'South Korea': 'S. Korea',
     'New Zealand': 'N. Zealand',
   };
-  return map[name] ?? (name.length > 12 ? name.slice(0, 11) + '…' : name);
+  return map[name] ?? (name.length > 11 ? name.slice(0, 10) + '…' : name);
 }
 
 interface Standing {
@@ -69,9 +69,7 @@ function GroupMiniCard({ group, matchPicks, onClick }: GroupMiniCardProps) {
   const complete = pickedCount === total;
   const started = pickedCount > 0;
 
-  const standings = started
-    ? computeStandings(group.teams, matches, matchPicks)
-    : null;
+  const standings = started ? computeStandings(group.teams, matches, matchPicks) : null;
 
   return (
     <div
@@ -97,31 +95,63 @@ function GroupMiniCard({ group, matchPicks, onClick }: GroupMiniCardProps) {
       <div className="border-t border-green-800 mb-2" />
 
       {started && standings ? (
-        /* Standings table */
-        <div className="space-y-1">
-          {standings.map((row, i) => {
-            const meta = getTeamMeta(row.team);
-            const advances = i < 2;
-            return (
-              <div key={row.team} className="flex items-center gap-1.5 min-w-0">
-                <span className={`text-[10px] font-bold w-3 flex-shrink-0 ${advances ? 'text-yellow-400' : 'text-green-600'}`}>
-                  {i + 1}
-                </span>
-                <img
-                  src={getFlagUrl(meta.flag)}
-                  alt={row.team}
-                  className="w-5 h-3.5 object-cover rounded-sm flex-shrink-0"
-                  loading="lazy"
-                />
-                <span className={`text-xs truncate flex-1 min-w-0 ${advances ? 'text-white font-medium' : 'text-green-400'}`}>
-                  {shortenName(row.team)}
-                </span>
-                <span className={`text-[11px] font-bold flex-shrink-0 ${advances ? 'text-yellow-400' : 'text-green-600'}`}>
-                  {row.pts}
-                </span>
-              </div>
-            );
-          })}
+        /* Standings table with W/D/L + FIFA rank */
+        <div>
+          {/* Column headers */}
+          <div className="grid text-[9px] text-green-600 mb-1 px-0.5" style={{ gridTemplateColumns: '12px 1fr 16px 16px 16px 20px' }}>
+            <span></span>
+            <span>Team</span>
+            <span className="text-center">W</span>
+            <span className="text-center">D</span>
+            <span className="text-center">L</span>
+            <span className="text-right font-bold">Pts</span>
+          </div>
+          <div className="space-y-0.5">
+            {standings.map((row, i) => {
+              const meta = getTeamMeta(row.team);
+              const autoAdvance = i < 2;
+              const mayAdvance = i === 2 && row.pts > 0;
+              return (
+                <div
+                  key={row.team}
+                  className={`grid items-center gap-0 rounded px-0.5 py-0.5 ${
+                    autoAdvance ? 'bg-yellow-500/8' : mayAdvance ? 'bg-blue-500/5' : ''
+                  }`}
+                  style={{ gridTemplateColumns: '12px 1fr 16px 16px 16px 20px' }}
+                >
+                  {/* Pos */}
+                  <span className={`text-[10px] font-bold ${autoAdvance ? 'text-yellow-400' : mayAdvance ? 'text-blue-400' : 'text-green-600'}`}>
+                    {i + 1}
+                  </span>
+                  {/* Flag + name + rank */}
+                  <div className="flex items-center gap-1 min-w-0">
+                    <img src={getFlagUrl(meta.flag)} alt={row.team} className="w-4 h-3 object-cover rounded-sm flex-shrink-0" loading="lazy" />
+                    <div className="min-w-0">
+                      <span className={`text-[10px] truncate block leading-tight ${autoAdvance ? 'text-white font-medium' : mayAdvance ? 'text-blue-200' : 'text-green-400'}`}>
+                        {shortenName(row.team)}
+                      </span>
+                      <span className="text-[8px] text-green-600 leading-none">#{meta.fifaRank}</span>
+                    </div>
+                  </div>
+                  {/* W */}
+                  <span className="text-[10px] text-center text-green-300">{row.w}</span>
+                  {/* D */}
+                  <span className="text-[10px] text-center text-green-400">{row.d}</span>
+                  {/* L */}
+                  <span className="text-[10px] text-center text-green-500">{row.l}</span>
+                  {/* Pts */}
+                  <span className={`text-[11px] text-right font-bold ${autoAdvance ? 'text-yellow-400' : mayAdvance ? 'text-blue-400' : 'text-green-600'}`}>
+                    {row.pts}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          {complete && (
+            <div className="mt-1.5 text-[9px] text-green-600 leading-tight">
+              <span className="text-yellow-500">■</span> auto-advance · <span className="text-blue-400">■</span> may qualify (best 3rd)
+            </div>
+          )}
         </div>
       ) : (
         /* Plain team list — no picks yet */
@@ -130,12 +160,7 @@ function GroupMiniCard({ group, matchPicks, onClick }: GroupMiniCardProps) {
             const meta = getTeamMeta(team);
             return (
               <div key={team} className="flex items-center gap-1.5 min-w-0">
-                <img
-                  src={getFlagUrl(meta.flag)}
-                  alt={team}
-                  className="w-6 h-4 object-cover rounded-sm flex-shrink-0"
-                  loading="lazy"
-                />
+                <img src={getFlagUrl(meta.flag)} alt={team} className="w-6 h-4 object-cover rounded-sm flex-shrink-0" loading="lazy" />
                 <span className="text-xs text-white truncate flex-1 min-w-0">{shortenName(team)}</span>
                 <span className="text-[10px] text-green-600 flex-shrink-0 font-mono">#{meta.fifaRank}</span>
               </div>

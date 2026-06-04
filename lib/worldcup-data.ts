@@ -1108,11 +1108,13 @@ export function computeMatchOdds(
   // Rank difference: positive = home team is ranked higher (smaller number)
   const diff = awayRank - homeRank;
 
-  // Logistic probability for each outcome
-  const k = 0.025;
+  // Logistic probability for each outcome.
+  // k=0.020 reduces over-weighting of rank gaps; draw floor raised to match
+  // real international football draw rates (~25-30%).
+  const k = 0.020;
   const pHome = 1 / (1 + Math.exp(-(k * diff + 0.05)));
   const pAway = 1 / (1 + Math.exp(k * diff + 0.05));
-  const pDraw = Math.max(0.18, 0.27 - 0.002 * Math.abs(diff));
+  const pDraw = Math.max(0.22, 0.40 - 0.002 * Math.abs(diff));
 
   const total = pHome + pAway + pDraw;
 
@@ -1133,10 +1135,52 @@ export function computeMatchProbabilities(
   const homeRank = getTeamMeta(homeTeam).fifaRank;
   const awayRank = getTeamMeta(awayTeam).fifaRank;
   const diff = awayRank - homeRank;
-  const k = 0.025;
+  const k = 0.020;
   const pHome = 1 / (1 + Math.exp(-(k * diff + 0.05)));
   const pAway = 1 / (1 + Math.exp(k * diff + 0.05));
-  const pDraw = Math.max(0.18, 0.27 - 0.002 * Math.abs(diff));
+  const pDraw = Math.max(0.22, 0.40 - 0.002 * Math.abs(diff));
   const total = pHome + pAway + pDraw;
   return { home: pHome / total, draw: pDraw / total, away: pAway / total };
 }
+
+export interface GroupStanding {
+  team: string;
+  p: number;
+  w: number;
+  d: number;
+  l: number;
+  pts: number;
+}
+
+export function computeGroupStandings(
+  groupId: string,
+  picks: Record<string, string>
+): GroupStanding[] {
+  const group = GROUPS.find((g) => g.id === groupId);
+  if (!group) return [];
+  const matches = getGroupMatches(groupId);
+  const table: Record<string, GroupStanding> = {};
+  for (let i = 0; i < group.teams.length; i++) {
+    const t = group.teams[i];
+    table[t] = { team: t, p: 0, w: 0, d: 0, l: 0, pts: 0 };
+  }
+  for (let i = 0; i < matches.length; i++) {
+    const m = matches[i];
+    const pick = picks[m.matchId];
+    if (!pick) continue;
+    table[m.home].p++;
+    table[m.away].p++;
+    if (pick === 'home') {
+      table[m.home].w++; table[m.home].pts += 3; table[m.away].l++;
+    } else if (pick === 'away') {
+      table[m.away].w++; table[m.away].pts += 3; table[m.home].l++;
+    } else {
+      table[m.home].d++; table[m.home].pts++;
+      table[m.away].d++; table[m.away].pts++;
+    }
+  }
+  return group.teams
+    .map((t) => table[t])
+    .sort((a, b) => b.pts - a.pts || b.w - a.w || a.team.localeCompare(b.team));
+}
+

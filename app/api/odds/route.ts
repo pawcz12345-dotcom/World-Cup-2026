@@ -67,20 +67,34 @@ interface PolyMarket {
 async function fetchPolymarketOdds(): Promise<Record<string, MatchOdds>> {
   const result: Record<string, MatchOdds> = {};
   try {
-    const res = await fetch(
-      'https://gamma-api.polymarket.com/markets?q=World+Cup+2026&active=true&closed=false&limit=500',
-      {
-        headers: {
-          Accept: 'application/json',
-          'User-Agent':
-            'Mozilla/5.0 (compatible; WorldCupPool/1.0; +https://worldcup2026pool.vercel.app)',
-        },
-        next: { revalidate: 300 },
+    // Try multiple queries to maximise hit rate for individual match markets
+    const queries = [
+      'https://gamma-api.polymarket.com/markets?q=2026+FIFA+World+Cup&active=true&closed=false&limit=500',
+      'https://gamma-api.polymarket.com/markets?q=World+Cup+2026+group&active=true&closed=false&limit=500',
+    ];
+    const headers = {
+      Accept: 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Referer': 'https://polymarket.com/',
+    };
+    let allMarkets: PolyMarket[] = [];
+    for (let qi = 0; qi < queries.length; qi++) {
+      const res = await fetch(queries[qi], { headers, next: { revalidate: 300 } });
+      if (!res.ok) continue;
+      const batch: PolyMarket[] = await res.json().catch(() => []);
+      for (let mi = 0; mi < batch.length; mi++) allMarkets.push(batch[mi]);
+    }
+    // Deduplicate by question
+    const seenQuestions: Record<string, boolean> = {};
+    const markets: PolyMarket[] = [];
+    for (let i = 0; i < allMarkets.length; i++) {
+      const q = allMarkets[i].question;
+      if (!seenQuestions[q]) {
+        seenQuestions[q] = true;
+        markets.push(allMarkets[i]);
       }
-    );
-    if (!res.ok) return result;
-
-    const markets: PolyMarket[] = await res.json();
+    }
+    if (markets.length === 0) return result;
 
     for (const mkt of markets) {
       if (!mkt.active || mkt.closed) continue;
@@ -96,9 +110,9 @@ async function fetchPolymarketOdds(): Promise<Record<string, MatchOdds>> {
 
       if (outcomes.length !== 3 || prices.length !== 3) continue;
 
-      // Find which outcome is "Draw"
+      // Find the draw outcome — Polymarket labels it "Draw", "Tie", or "Draw/Tie"
       const drawIdx = outcomes.findIndex((o) =>
-        /^draw$/i.test(o.trim())
+        /^(draw|tie|draw\/tie)$/i.test(o.trim())
       );
       if (drawIdx === -1) continue;
 
