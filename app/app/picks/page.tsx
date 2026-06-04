@@ -5,14 +5,14 @@ import GroupOverview from '@/components/picks/GroupOverview';
 import GroupDetailModal from '@/components/picks/GroupDetailModal';
 import KnockoutBracket from '@/components/picks/KnockoutBracket';
 import { GROUPS, GROUP_MATCHES, ALL_TEAMS } from '@/lib/worldcup-data';
+import type { MatchOdds } from '@/app/api/odds/route';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 export default function PicksPage() {
-  // matchId -> "home"|"draw"|"away"
   const [matchPicks, setMatchPicks] = useState<Record<string, string>>({});
-  // "round-slot" -> team
   const [bracketPicks, setBracketPicks] = useState<Record<string, string>>({});
+  const [oddsMap, setOddsMap] = useState<Record<string, MatchOdds>>({});
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -23,9 +23,10 @@ export default function PicksPage() {
   // Load saved picks on mount
   const fetchPicks = useCallback(async () => {
     try {
-      const [groupRes, bracketRes] = await Promise.all([
+      const [groupRes, bracketRes, oddsRes] = await Promise.all([
         fetch('/api/picks/groups'),
         fetch('/api/picks/bracket'),
+        fetch('/api/odds'),
       ]);
       const groupData = await groupRes.json();
       if (groupData.picks) setMatchPicks(groupData.picks);
@@ -38,6 +39,9 @@ export default function PicksPage() {
         }
         setBracketPicks(map);
       }
+
+      const oddsData = await oddsRes.json().catch(() => ({}));
+      if (oddsData.odds) setOddsMap(oddsData.odds);
     } catch (err) {
       console.error('Error loading picks', err);
     } finally {
@@ -155,6 +159,7 @@ export default function PicksPage() {
             matchPicks={matchPicks}
             onPickChange={handleMatchPickChange}
             onClose={() => setSelectedGroup(null)}
+            oddsMap={oddsMap}
           />
         )}
       </section>
