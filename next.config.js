@@ -1,4 +1,11 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  outputFileTracingIncludes: {
+    '/api/**/*': [
+      './node_modules/.prisma/client/**',
+      './node_modules/@prisma/client/**',
+    ],
+  },
+};
 
 module.exports = nextConfig;
