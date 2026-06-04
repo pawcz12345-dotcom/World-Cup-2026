@@ -11,23 +11,25 @@ datasource db {
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
-  username     String        @unique
-  password     String
-  createdAt    DateTime      @default(now())
-  groupPicks   GroupPick[]
-  bracketPicks BracketPick[]
-  championPick ChampionPick?
+  id                  Int                  @id @default(autoincrement())
+  username            String               @unique
+  password            String
+  createdAt           DateTime             @default(now())
+  groupStandingPicks  GroupStandingPick[]
+  bracketPicks        BracketPick[]
 }
 
-model GroupPick {
-  id      Int    @id @default(autoincrement())
-  userId  Int
-  matchId String // e.g. "A1" = Group A Match 1
-  pick    String // "home" | "draw" | "away"
-  user    User   @relation(fields: [userId], references: [id])
+model GroupStandingPick {
+  id     Int    @id @default(autoincrement())
+  userId Int
+  group  String // "A" through "L"
+  rank1  String // team predicted to finish 1st
+  rank2  String // team predicted to finish 2nd
+  rank3  String // team predicted to finish 3rd
+  rank4  String // team predicted to finish 4th
+  user   User   @relation(fields: [userId], references: [id])
 
-  @@unique([userId, matchId])
+  @@unique([userId, group])
 }
 
 model BracketPick {
@@ -39,13 +41,6 @@ model BracketPick {
   user   User   @relation(fields: [userId], references: [id])
 
   @@unique([userId, round, slot])
-}
-
-model ChampionPick {
-  id     Int    @id @default(autoincrement())
-  userId Int    @unique
-  team   String
-  user   User   @relation(fields: [userId], references: [id])
 }
 
 model MatchResult {

@@ -869,6 +869,10 @@ export const BRACKET_ROUNDS = [
 
 export const SCORING = {
   groupCorrect: 3,
+  groupRank1: 4,
+  groupRank2: 3,
+  groupRank3: 2,
+  groupRank4: 1,
   r32: 2,
   r16: 3,
   qf: 5,
@@ -876,3 +880,138 @@ export const SCORING = {
   final: 13,
   champion: 20,
 };
+
+// Flag emoji map for all 48 teams
+export const TEAM_FLAGS: Record<string, string> = {
+  'Mexico': '🇲🇽',
+  'South Africa': '🇿🇦',
+  'South Korea': '🇰🇷',
+  'Czechia': '🇨🇿',
+  'Canada': '🇨🇦',
+  'Switzerland': '🇨🇭',
+  'Qatar': '🇶🇦',
+  'Bosnia and Herzegovina': '🇧🇦',
+  'Brazil': '🇧🇷',
+  'Morocco': '🇲🇦',
+  'Haiti': '🇭🇹',
+  'Scotland': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
+  'United States': '🇺🇸',
+  'Paraguay': '🇵🇾',
+  'Australia': '🇦🇺',
+  'Turkey': '🇹🇷',
+  'Germany': '🇩🇪',
+  'Curacao': '🇨🇼',
+  "Cote d'Ivoire": '🇨🇮',
+  'Ecuador': '🇪🇨',
+  'Netherlands': '🇳🇱',
+  'Japan': '🇯🇵',
+  'Sweden': '🇸🇪',
+  'Tunisia': '🇹🇳',
+  'Belgium': '🇧🇪',
+  'Egypt': '🇪🇬',
+  'Iran': '🇮🇷',
+  'New Zealand': '🇳🇿',
+  'Spain': '🇪🇸',
+  'Cabo Verde': '🇨🇻',
+  'Saudi Arabia': '🇸🇦',
+  'Uruguay': '🇺🇾',
+  'France': '🇫🇷',
+  'Senegal': '🇸🇳',
+  'Norway': '🇳🇴',
+  'Iraq': '🇮🇶',
+  'Argentina': '🇦🇷',
+  'Algeria': '🇩🇿',
+  'Austria': '🇦🇹',
+  'Jordan': '🇯🇴',
+  'Portugal': '🇵🇹',
+  'DR Congo': '🇨🇩',
+  'Uzbekistan': '🇺🇿',
+  'Colombia': '🇨🇴',
+  'England': '🏴󠁧󠁢󠁥󠁮󠁧󠁿',
+  'Croatia': '🇭🇷',
+  'Ghana': '🇬🇭',
+  'Panama': '🇵🇦',
+};
+
+// Bracket slot definitions
+// Left half: R32 slots 0-7 → R16 slots 0-3 → QF slots 0-1 → SF slot 0 → Final
+// Right half: R32 slots 8-15 → R16 slots 4-7 → QF slots 2-3 → SF slot 1 → Final
+export const BRACKET_SLOTS: { round: string; slot: number; label: string }[] = [
+  // R32 - left half (slots 0-7)
+  { round: 'R32', slot: 0, label: '1A vs 2B' },
+  { round: 'R32', slot: 1, label: '1C vs 2D' },
+  { round: 'R32', slot: 2, label: '1E vs 2F' },
+  { round: 'R32', slot: 3, label: '1G vs 2H' },
+  { round: 'R32', slot: 4, label: '1I vs 2J' },
+  { round: 'R32', slot: 5, label: '1K vs 2L' },
+  { round: 'R32', slot: 6, label: '3rd Best (1)' },
+  { round: 'R32', slot: 7, label: '3rd Best (2)' },
+  // R32 - right half (slots 8-15)
+  { round: 'R32', slot: 8,  label: '2A vs 1B' },
+  { round: 'R32', slot: 9,  label: '2C vs 1D' },
+  { round: 'R32', slot: 10, label: '2E vs 1F' },
+  { round: 'R32', slot: 11, label: '2G vs 1H' },
+  { round: 'R32', slot: 12, label: '2I vs 1J' },
+  { round: 'R32', slot: 13, label: '2K vs 1L' },
+  { round: 'R32', slot: 14, label: '3rd Best (3)' },
+  { round: 'R32', slot: 15, label: '3rd Best (4)' },
+  // R16 - left half (slots 0-3)
+  { round: 'R16', slot: 0, label: 'R16 Match 1' },
+  { round: 'R16', slot: 1, label: 'R16 Match 2' },
+  { round: 'R16', slot: 2, label: 'R16 Match 3' },
+  { round: 'R16', slot: 3, label: 'R16 Match 4' },
+  // R16 - right half (slots 4-7)
+  { round: 'R16', slot: 4, label: 'R16 Match 5' },
+  { round: 'R16', slot: 5, label: 'R16 Match 6' },
+  { round: 'R16', slot: 6, label: 'R16 Match 7' },
+  { round: 'R16', slot: 7, label: 'R16 Match 8' },
+  // QF - left half (slots 0-1)
+  { round: 'QF', slot: 0, label: 'QF Match 1' },
+  { round: 'QF', slot: 1, label: 'QF Match 2' },
+  // QF - right half (slots 2-3)
+  { round: 'QF', slot: 2, label: 'QF Match 3' },
+  { round: 'QF', slot: 3, label: 'QF Match 4' },
+  // SF
+  { round: 'SF', slot: 0, label: 'Semi-Final 1' },
+  { round: 'SF', slot: 1, label: 'Semi-Final 2' },
+  // Final
+  { round: 'Final', slot: 0, label: 'World Cup Final' },
+];
+
+// Given a round and slot that won, compute the parent round and slot
+export function getParentSlot(round: string, slot: number): { round: string; slot: number } | null {
+  switch (round) {
+    case 'R32':
+      if (slot < 8) return { round: 'R16', slot: Math.floor(slot / 2) };
+      return { round: 'R16', slot: 4 + Math.floor((slot - 8) / 2) };
+    case 'R16':
+      if (slot < 4) return { round: 'QF', slot: Math.floor(slot / 2) };
+      return { round: 'QF', slot: 2 + Math.floor((slot - 4) / 2) };
+    case 'QF':
+      if (slot < 2) return { round: 'SF', slot: 0 };
+      return { round: 'SF', slot: 1 };
+    case 'SF':
+      return { round: 'Final', slot: 0 };
+    default:
+      return null;
+  }
+}
+
+// Given a parent slot, find which two child slots feed into it
+export function getChildSlots(round: string, slot: number): { round: string; slots: number[] } | null {
+  switch (round) {
+    case 'R16':
+      if (slot < 4) return { round: 'R32', slots: [slot * 2, slot * 2 + 1] };
+      return { round: 'R32', slots: [8 + (slot - 4) * 2, 8 + (slot - 4) * 2 + 1] };
+    case 'QF':
+      if (slot < 2) return { round: 'R16', slots: [slot * 2, slot * 2 + 1] };
+      return { round: 'R16', slots: [4 + (slot - 2) * 2, 4 + (slot - 2) * 2 + 1] };
+    case 'SF':
+      if (slot === 0) return { round: 'QF', slots: [0, 1] };
+      return { round: 'QF', slots: [2, 3] };
+    case 'Final':
+      return { round: 'SF', slots: [0, 1] };
+    default:
+      return null;
+  }
+}

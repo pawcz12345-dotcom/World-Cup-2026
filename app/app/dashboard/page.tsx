@@ -1,6 +1,6 @@
 import { getSessionUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { GROUP_MATCHES } from '@/lib/worldcup-data';
+import { GROUPS } from '@/lib/worldcup-data';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -10,52 +10,42 @@ export default async function DashboardPage() {
   if (!user) return null;
 
   // Get current user's picks counts
-  const [groupPicksCount, bracketPicksCount, championPick] = await Promise.all([
-    prisma.groupPick.count({ where: { userId: user.userId } }),
+  const [groupStandingPicksCount, bracketPicksCount] = await Promise.all([
+    prisma.groupStandingPick.count({ where: { userId: user.userId } }),
     prisma.bracketPick.count({ where: { userId: user.userId } }),
-    prisma.championPick.findUnique({ where: { userId: user.userId } }),
   ]);
+
+  // Champion is the Final bracket pick (slot 0)
+  const finalPick = await prisma.bracketPick.findUnique({
+    where: { userId_round_slot: { userId: user.userId, round: 'Final', slot: 0 } },
+  });
+  const championPick = finalPick?.team ?? null;
 
   // Get all match results
   const matchResults = await prisma.matchResult.findMany();
   const resultMap = new Map(matchResults.map((r) => [r.matchId, r]));
 
-  // Get user's group picks
-  const userGroupPicks = await prisma.groupPick.findMany({
-    where: { userId: user.userId },
-  });
+  // Score is 0 for now (no actual standings stored yet)
+  const score = 0;
 
-  // Calculate current score (group stage only; bracket results handled when available)
-  let score = 0;
-  for (const pick of userGroupPicks) {
-    const result = resultMap.get(pick.matchId);
-    if (result?.result && result.result === pick.pick) {
-      score += 3;
-    }
-  }
-
-  // Get top 3 on leaderboard
+  // Get top 3 on leaderboard (scores all 0 for now)
   const allUsers = await prisma.user.findMany({
     include: {
-      groupPicks: true,
+      groupStandingPicks: true,
       bracketPicks: true,
-      championPick: true,
     },
   });
 
   const leaderboard = allUsers
-    .map((u) => {
-      let s = 0;
-      for (const gp of u.groupPicks) {
-        const res = resultMap.get(gp.matchId);
-        if (res?.result === gp.pick) s += 3;
-      }
-      return { username: u.username, score: s, id: u.id };
-    })
-    .sort((a, b) => b.score - a.score)
+    .map((u) => ({
+      username: u.username,
+      score: 0,
+      id: u.id,
+    }))
+    .sort((a, b) => b.score - a.score || a.username.localeCompare(b.username))
     .slice(0, 3);
 
-  const totalGroupMatches = GROUP_MATCHES.length;
+  const totalGroups = GROUPS.length; // 12
   const completedGroupMatches = matchResults.filter(
     (r) => r.status === 'finished'
   ).length;
@@ -79,10 +69,10 @@ export default async function DashboardPage() {
           <div className="text-wc-green-300 text-sm mt-1">Your Points</div>
         </div>
         <div className="card text-center">
-          <div className="text-4xl font-bold text-white">{groupPicksCount}</div>
+          <div className="text-4xl font-bold text-white">{groupStandingPicksCount}</div>
           <div className="text-wc-green-300 text-sm mt-1">
-            Group Picks
-            <span className="text-wc-green-500 ml-1">/ {totalGroupMatches}</span>
+            Groups Ranked
+            <span className="text-wc-green-500 ml-1">/ {totalGroups}</span>
           </div>
         </div>
         <div className="card text-center">
@@ -100,25 +90,25 @@ export default async function DashboardPage() {
       {/* Picks Status */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="card">
-          <h3 className="font-bold text-wc-gold-400 mb-3">Group Stage Picks</h3>
+          <h3 className="font-bold text-wc-gold-400 mb-3">Group Stage Rankings</h3>
           <div className="mb-2">
             <div className="flex justify-between text-sm mb-1">
               <span className="text-wc-green-300">Progress</span>
               <span className="text-white">
-                {groupPicksCount} / {totalGroupMatches}
+                {groupStandingPicksCount} / {totalGroups}
               </span>
             </div>
             <div className="w-full bg-wc-green-800 rounded-full h-2">
               <div
                 className="bg-wc-gold-500 rounded-full h-2 transition-all"
                 style={{
-                  width: `${(groupPicksCount / totalGroupMatches) * 100}%`,
+                  width: `${(groupStandingPicksCount / totalGroups) * 100}%`,
                 }}
               />
             </div>
           </div>
-          <Link href="/app/picks/groups" className="btn-secondary text-sm block text-center mt-3">
-            {groupPicksCount === totalGroupMatches ? 'Edit Picks' : 'Make Picks'}
+          <Link href="/app/picks" className="btn-secondary text-sm block text-center mt-3">
+            {groupStandingPicksCount === totalGroups ? 'Edit Picks' : 'Make Picks'}
           </Link>
         </div>
 
@@ -129,7 +119,7 @@ export default async function DashboardPage() {
               ? `${bracketPicksCount} bracket picks made`
               : 'No bracket picks yet'}
           </p>
-          <Link href="/app/picks/bracket" className="btn-secondary text-sm block text-center">
+          <Link href="/app/picks" className="btn-secondary text-sm block text-center">
             {bracketPicksCount > 0 ? 'Edit Bracket' : 'Fill Bracket'}
           </Link>
         </div>
@@ -139,14 +129,14 @@ export default async function DashboardPage() {
           {championPick ? (
             <div>
               <div className="text-xl font-bold text-white mb-2">
-                {championPick.team}
+                {championPick}
               </div>
               <p className="text-wc-green-300 text-sm">Your champion pick</p>
             </div>
           ) : (
             <p className="text-wc-green-300 text-sm mb-3">No champion picked yet</p>
           )}
-          <Link href="/app/picks/champion" className="btn-secondary text-sm block text-center mt-3">
+          <Link href="/app/picks" className="btn-secondary text-sm block text-center mt-3">
             {championPick ? 'Change Pick' : 'Pick Champion'}
           </Link>
         </div>
@@ -193,17 +183,17 @@ export default async function DashboardPage() {
       <div className="card">
         <h3 className="font-bold text-wc-gold-400 mb-4">Quick Actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link href="/app/picks/groups" className="btn-secondary text-center text-sm">
-            Group Picks
-          </Link>
-          <Link href="/app/picks/bracket" className="btn-secondary text-center text-sm">
-            Bracket
+          <Link href="/app/picks" className="btn-secondary text-center text-sm">
+            My Picks
           </Link>
           <Link href="/app/scores" className="btn-secondary text-center text-sm">
             Live Scores
           </Link>
           <Link href="/app/standings" className="btn-secondary text-center text-sm">
             Standings
+          </Link>
+          <Link href="/app/picks" className="btn-secondary text-center text-sm">
+            Champion
           </Link>
         </div>
       </div>

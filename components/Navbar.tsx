@@ -10,9 +10,7 @@ interface NavbarProps {
 
 const navLinks = [
   { href: '/app/dashboard', label: 'Dashboard', icon: '🏠' },
-  { href: '/app/picks/groups', label: 'Group Picks', icon: '📋' },
-  { href: '/app/picks/bracket', label: 'Bracket', icon: '🏆' },
-  { href: '/app/picks/champion', label: 'Champion', icon: '⭐' },
+  { href: '/app/picks', label: 'Picks', icon: '🎯' },
   { href: '/app/scores', label: 'Live Scores', icon: '⚽' },
   { href: '/app/standings', label: 'Standings', icon: '📊' },
 ];

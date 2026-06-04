@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
-import { BRACKET_ROUNDS, ALL_TEAMS } from '@/lib/worldcup-data';
+import { ALL_TEAMS } from '@/lib/worldcup-data';
+
+const VALID_ROUNDS = new Set(['R32', 'R16', 'QF', 'SF', 'Final']);
+const ROUND_MAX_SLOTS: Record<string, number> = {
+  R32: 15,   // slots 0-15
+  R16: 7,    // slots 0-7
+  QF: 3,     // slots 0-3
+  SF: 1,     // slots 0-1
+  Final: 0,  // slot 0
+};
 
 // GET: fetch current user's bracket picks
 export async function GET() {
@@ -17,7 +26,8 @@ export async function GET() {
   return NextResponse.json({ picks });
 }
 
-// POST: save/update bracket picks
+// POST: save/update a single bracket pick
+// Body: { round: string, slot: number, team: string }
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
   if (!user) {
@@ -26,46 +36,33 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { picks } = body as {
-      picks: Array<{ round: string; slot: number; team: string }>;
-    };
+    const { round, slot, team } = body as { round: string; slot: number; team: string };
 
-    if (!Array.isArray(picks)) {
-      return NextResponse.json({ error: 'Invalid picks data' }, { status: 400 });
+    // Validate round
+    if (!round || !VALID_ROUNDS.has(round)) {
+      return NextResponse.json({ error: 'Invalid round' }, { status: 400 });
     }
 
-    const validRounds = new Set(BRACKET_ROUNDS.map((r) => r.id));
+    // Validate slot
+    if (typeof slot !== 'number' || slot < 0 || slot > ROUND_MAX_SLOTS[round]) {
+      return NextResponse.json({ error: 'Invalid slot' }, { status: 400 });
+    }
+
+    // Validate team
     const validTeams = new Set(ALL_TEAMS);
-
-    const upserts = [];
-
-    for (const pick of picks) {
-      const { round, slot, team } = pick;
-
-      // Validate
-      if (!validRounds.has(round)) continue;
-      if (!team || !validTeams.has(team)) continue;
-
-      const roundDef = BRACKET_ROUNDS.find((r) => r.id === round);
-      if (!roundDef) continue;
-      if (slot < 1 || slot > roundDef.slots) continue;
-
-      upserts.push(
-        prisma.bracketPick.upsert({
-          where: {
-            userId_round_slot: { userId: user.userId, round, slot },
-          },
-          update: { team },
-          create: { userId: user.userId, round, slot, team },
-        })
-      );
+    if (!team || !validTeams.has(team)) {
+      return NextResponse.json({ error: 'Invalid team' }, { status: 400 });
     }
 
-    await prisma.$transaction(upserts);
+    const pick = await prisma.bracketPick.upsert({
+      where: { userId_round_slot: { userId: user.userId, round, slot } },
+      update: { team },
+      create: { userId: user.userId, round, slot, team },
+    });
 
-    return NextResponse.json({ message: 'Bracket picks saved', count: upserts.length });
+    return NextResponse.json({ message: 'Pick saved', pick });
   } catch (error) {
-    console.error('Save bracket picks error:', error);
-    return NextResponse.json({ error: 'Failed to save picks' }, { status: 500 });
+    console.error('Save bracket pick error:', error);
+    return NextResponse.json({ error: 'Failed to save pick' }, { status: 500 });
   }
 }

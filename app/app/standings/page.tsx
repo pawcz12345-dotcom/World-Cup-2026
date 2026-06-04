@@ -7,10 +7,9 @@ interface UserScore {
   id: number;
   username: string;
   score: number;
-  groupPicksCorrect: number;
-  totalGroupPicks: number;
+  groupPicksCount: number;
   bracketPicksCount: number;
-  hasChampion: boolean;
+  championPick: string | null;
 }
 
 export default async function StandingsPage() {
@@ -18,44 +17,36 @@ export default async function StandingsPage() {
 
   // Get all match results
   const matchResults = await prisma.matchResult.findMany();
-  const resultMap = new Map(matchResults.map((r) => [r.matchId, r]));
 
   // Get all users with picks
   const users = await prisma.user.findMany({
     include: {
-      groupPicks: true,
+      groupStandingPicks: true,
       bracketPicks: true,
-      championPick: true,
     },
     orderBy: { createdAt: 'asc' },
   });
 
   // Calculate scores for each user
+  // Score = 0 for now until actual group standings / bracket results are entered by admin
   const scores: UserScore[] = users.map((user) => {
-    let score = 0;
-    let groupPicksCorrect = 0;
+    const score = 0;
 
-    // Group picks scoring
-    for (const gp of user.groupPicks) {
-      const result = resultMap.get(gp.matchId);
-      if (result?.result && result.result === gp.pick) {
-        score += 3;
-        groupPicksCorrect++;
-      }
-    }
+    // Champion is the Final bracket pick slot 0
+    const championPick =
+      user.bracketPicks.find((p) => p.round === 'Final' && p.slot === 0)?.team ?? null;
 
     return {
       id: user.id,
       username: user.username,
       score,
-      groupPicksCorrect,
-      totalGroupPicks: user.groupPicks.length,
+      groupPicksCount: user.groupStandingPicks.length,
       bracketPicksCount: user.bracketPicks.length,
-      hasChampion: !!user.championPick,
+      championPick,
     };
   });
 
-  // Sort by score descending
+  // Sort by score descending, then username
   scores.sort((a, b) => b.score - a.score || a.username.localeCompare(b.username));
 
   const finishedMatches = matchResults.filter((r) => r.status === 'finished').length;
@@ -74,7 +65,10 @@ export default async function StandingsPage() {
       <div className="card bg-wc-green-900/50 border-wc-green-800">
         <h3 className="text-sm font-bold text-wc-gold-400 mb-2">Scoring System</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-wc-green-300">
-          <div>Group result: <span className="text-wc-gold-400 font-bold">3 pts</span></div>
+          <div>Group 1st: <span className="text-wc-gold-400 font-bold">4 pts</span></div>
+          <div>Group 2nd: <span className="text-wc-gold-400 font-bold">3 pts</span></div>
+          <div>Group 3rd: <span className="text-wc-gold-400 font-bold">2 pts</span></div>
+          <div>Group 4th: <span className="text-wc-gold-400 font-bold">1 pt</span></div>
           <div>R32 pick: <span className="text-wc-gold-400 font-bold">2 pts</span></div>
           <div>R16 pick: <span className="text-wc-gold-400 font-bold">3 pts</span></div>
           <div>QF pick: <span className="text-wc-gold-400 font-bold">5 pts</span></div>
@@ -106,7 +100,7 @@ export default async function StandingsPage() {
                     Points
                   </th>
                   <th className="text-right py-3 px-4 text-wc-green-400 text-sm font-medium hidden sm:table-cell">
-                    Group Picks
+                    Groups
                   </th>
                   <th className="text-right py-3 px-4 text-wc-green-400 text-sm font-medium hidden md:table-cell">
                     Bracket
@@ -117,14 +111,14 @@ export default async function StandingsPage() {
                 </tr>
               </thead>
               <tbody>
-                {scores.map((user, index) => {
-                  const isCurrentUser = user.username === currentUser?.username;
+                {scores.map((u, index) => {
+                  const isCurrentUser = u.username === currentUser?.username;
                   const medal =
                     index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : null;
 
                   return (
                     <tr
-                      key={user.id}
+                      key={u.id}
                       className={`border-b border-wc-green-800/50 transition-colors ${
                         isCurrentUser
                           ? 'bg-wc-gold-500/10'
@@ -148,7 +142,7 @@ export default async function StandingsPage() {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-white">
-                            {user.username}
+                            {u.username}
                           </span>
                           {isCurrentUser && (
                             <span className="text-xs text-wc-gold-400 bg-wc-gold-500/20 px-1.5 py-0.5 rounded">
@@ -161,29 +155,26 @@ export default async function StandingsPage() {
                       {/* Points */}
                       <td className="py-3 px-4 text-right">
                         <span className="font-bold text-wc-gold-400 text-lg">
-                          {user.score}
+                          {u.score}
                         </span>
                       </td>
 
-                      {/* Group Picks */}
+                      {/* Groups ranked */}
                       <td className="py-3 px-4 text-right text-sm text-wc-green-300 hidden sm:table-cell">
-                        {user.groupPicksCorrect} correct
-                        <span className="text-wc-green-600 ml-1">
-                          / {user.totalGroupPicks} picked
-                        </span>
+                        {u.groupPicksCount}/12 groups
                       </td>
 
                       {/* Bracket */}
                       <td className="py-3 px-4 text-right hidden md:table-cell">
                         <span className="text-sm text-wc-green-400">
-                          {user.bracketPicksCount} picks
+                          {u.bracketPicksCount} picks
                         </span>
                       </td>
 
                       {/* Champion */}
                       <td className="py-3 px-4 text-right hidden md:table-cell">
-                        {user.hasChampion ? (
-                          <span className="text-wc-gold-400 text-sm">✓</span>
+                        {u.championPick ? (
+                          <span className="text-wc-gold-400 text-sm">{u.championPick}</span>
                         ) : (
                           <span className="text-wc-green-700 text-sm">—</span>
                         )}

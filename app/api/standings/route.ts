@@ -1,8 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
+import { GROUPS } from '@/lib/worldcup-data';
 
 export const dynamic = 'force-dynamic';
+
+// Helper: determine actual final standings for a group from match results.
+// Returns null if not enough results to determine standings.
+// For now, this is a placeholder since match results only track individual match
+// outcomes (W/D/L), not actual group standings. We'll score based on
+// admin-entered final standings if they are ever stored. For now we skip
+// group scoring until a future "FinalStandings" table is added.
+// The scoring below awards points by comparing picks to any stored standings.
 
 export async function GET() {
   const user = await getSessionUser();
@@ -11,49 +20,69 @@ export async function GET() {
   }
 
   try {
-    // Get all match results
-    const matchResults = await prisma.matchResult.findMany();
-    const resultMap = new Map(matchResults.map((r) => [r.matchId, r]));
-
-    // Get all users with picks
+    // Get all users with their picks
     const users = await prisma.user.findMany({
       include: {
-        groupPicks: true,
+        groupStandingPicks: true,
         bracketPicks: true,
-        championPick: true,
       },
     });
 
-    // Calculate scores for each user
+    // Build bracket result map from BracketPick records for scoring
+    // (In a real app, actual bracket results would come from a separate table.
+    //  For now, bracket scoring deferred to when knockout results are available.)
+    // We keep this extensible.
+
+    // ----------------------------------------------------------------
+    // Scoring: Group Stage
+    // Points: rank1 correct = 4, rank2 = 3, rank3 = 2, rank4 = 1
+    // We would need actual final standings per group to compare.
+    // For now, we don't have a "FinalGroupStandings" table, so group scoring = 0
+    // until an admin records actual final standings.
+    // ----------------------------------------------------------------
+
+    // ----------------------------------------------------------------
+    // Scoring: Bracket (BracketPick)
+    // R32 = 2 pts, R16 = 3 pts, QF = 5 pts, SF = 8 pts, Final = 13 pts
+    // Champion (Final slot 0) = 20 pts
+    // Actual bracket results would come from an admin-entered source.
+    // For now, bracket scoring = 0 until results exist.
+    // ----------------------------------------------------------------
+
+    const ROUND_POINTS: Record<string, number> = {
+      R32: 2,
+      R16: 3,
+      QF: 5,
+      SF: 8,
+      Final: 13,
+    };
+
     const standings = users.map((u) => {
       let score = 0;
-      let groupCorrect = 0;
 
-      // Group picks
-      for (const gp of u.groupPicks) {
-        const result = resultMap.get(gp.matchId);
-        if (result?.result && result.result === gp.pick) {
-          score += 3;
-          groupCorrect++;
-        }
-      }
+      // Group standing picks: score = 0 for now (no actual standings stored)
+      // This will be wired up when admin can enter final group standings.
+      const groupPicksCount = u.groupStandingPicks.length;
 
-      // Note: Bracket and champion picks will score once the knockout stage begins.
-      // The scoring logic is in lib/scoring.ts and can be wired in when results are available.
+      // Bracket picks: score = 0 for now (no actual bracket results stored)
+      const bracketPicksCount = u.bracketPicks.length;
+
+      // Champion is determined by Final round, slot 0 bracket pick
+      const championPick = u.bracketPicks.find(
+        (p) => p.round === 'Final' && p.slot === 0
+      )?.team ?? null;
 
       return {
         userId: u.id,
         username: u.username,
         score,
-        groupPicksCount: u.groupPicks.length,
-        groupCorrect,
-        bracketPicksCount: u.bracketPicks.length,
-        hasChampionPick: !!u.championPick,
-        championPick: u.championPick?.team || null,
+        groupPicksCount,
+        bracketPicksCount,
+        championPick,
       };
     });
 
-    // Sort by score desc
+    // Sort by score desc, then username asc
     standings.sort((a, b) => b.score - a.score || a.username.localeCompare(b.username));
 
     return NextResponse.json({ standings });

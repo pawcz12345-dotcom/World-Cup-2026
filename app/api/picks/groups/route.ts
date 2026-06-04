@@ -1,31 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
-import { GROUP_MATCHES } from '@/lib/worldcup-data';
+import { GROUPS } from '@/lib/worldcup-data';
 
-// GET: fetch current user's group picks (and optionally match results)
-export async function GET(request: NextRequest) {
+const VALID_GROUPS = new Set(GROUPS.map((g) => g.id));
+const ALL_TEAM_NAMES = new Set(GROUPS.flatMap((g) => g.teams));
+
+// GET: return all GroupStandingPicks for current user as { [group]: { rank1, rank2, rank3, rank4 } }
+export async function GET() {
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { searchParams } = new URL(request.url);
-  const wantsResults = searchParams.get('results') === '1';
-
-  if (wantsResults) {
-    const results = await prisma.matchResult.findMany();
-    return NextResponse.json({ results });
-  }
-
-  const picks = await prisma.groupPick.findMany({
+  const picks = await prisma.groupStandingPick.findMany({
     where: { userId: user.userId },
   });
 
-  return NextResponse.json({ picks });
+  const result: Record<string, { rank1: string; rank2: string; rank3: string; rank4: string }> = {};
+  for (const p of picks) {
+    result[p.group] = { rank1: p.rank1, rank2: p.rank2, rank3: p.rank3, rank4: p.rank4 };
+  }
+
+  return NextResponse.json({ picks: result });
 }
 
-// POST: save/update group picks
+// POST: upsert a GroupStandingPick for a single group
+// Body: { group: "A", rank1: "Mexico", rank2: "...", rank3: "...", rank4: "..." }
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
   if (!user) {
@@ -34,50 +35,51 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { picks } = body as { picks: Record<string, string> };
+    const { group, rank1, rank2, rank3, rank4 } = body as {
+      group: string;
+      rank1: string;
+      rank2: string;
+      rank3: string;
+      rank4: string;
+    };
 
-    if (!picks || typeof picks !== 'object') {
-      return NextResponse.json({ error: 'Invalid picks data' }, { status: 400 });
+    if (!group || !VALID_GROUPS.has(group)) {
+      return NextResponse.json({ error: 'Invalid group' }, { status: 400 });
     }
 
-    const validMatchIds = new Set(GROUP_MATCHES.map((m) => m.matchId));
-    const validPicks = ['home', 'draw', 'away'];
-    const now = new Date();
-
-    const upserts = [];
-
-    for (const [matchId, pick] of Object.entries(picks)) {
-      // Validate matchId
-      if (!validMatchIds.has(matchId)) continue;
-      // Validate pick value
-      if (!validPicks.includes(pick)) continue;
-
-      // Check if match is locked (already started)
-      const match = GROUP_MATCHES.find((m) => m.matchId === matchId);
-      if (match) {
-        const matchDate = new Date(match.date + 'T00:00:00');
-        if (matchDate <= now) {
-          // Match has started - don't update pick
-          continue;
-        }
+    // Validate all four teams are valid
+    for (const team of [rank1, rank2, rank3, rank4]) {
+      if (!team || !ALL_TEAM_NAMES.has(team)) {
+        return NextResponse.json({ error: `Invalid team: ${team}` }, { status: 400 });
       }
-
-      upserts.push(
-        prisma.groupPick.upsert({
-          where: {
-            userId_matchId: { userId: user.userId, matchId },
-          },
-          update: { pick },
-          create: { userId: user.userId, matchId, pick },
-        })
-      );
     }
 
-    await prisma.$transaction(upserts);
+    // Validate the teams belong to this group and are all distinct
+    const groupDef = GROUPS.find((g) => g.id === group);
+    if (!groupDef) {
+      return NextResponse.json({ error: 'Invalid group' }, { status: 400 });
+    }
+    const groupTeams = new Set(groupDef.teams);
+    const submitted = [rank1, rank2, rank3, rank4];
+    const unique = new Set(submitted);
+    if (unique.size !== 4) {
+      return NextResponse.json({ error: 'Duplicate teams in ranking' }, { status: 400 });
+    }
+    for (const team of submitted) {
+      if (!groupTeams.has(team)) {
+        return NextResponse.json({ error: `Team ${team} not in group ${group}` }, { status: 400 });
+      }
+    }
 
-    return NextResponse.json({ message: 'Picks saved', count: upserts.length });
+    const pick = await prisma.groupStandingPick.upsert({
+      where: { userId_group: { userId: user.userId, group } },
+      update: { rank1, rank2, rank3, rank4 },
+      create: { userId: user.userId, group, rank1, rank2, rank3, rank4 },
+    });
+
+    return NextResponse.json({ message: 'Pick saved', pick });
   } catch (error) {
-    console.error('Save group picks error:', error);
-    return NextResponse.json({ error: 'Failed to save picks' }, { status: 500 });
+    console.error('Save group standing pick error:', error);
+    return NextResponse.json({ error: 'Failed to save pick' }, { status: 500 });
   }
 }
