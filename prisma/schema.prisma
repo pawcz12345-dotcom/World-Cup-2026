@@ -1,0 +1,58 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  username     String        @unique
+  password     String
+  createdAt    DateTime      @default(now())
+  groupPicks   GroupPick[]
+  bracketPicks BracketPick[]
+  championPick ChampionPick?
+}
+
+model GroupPick {
+  id      Int    @id @default(autoincrement())
+  userId  Int
+  matchId String // e.g. "A1" = Group A Match 1
+  pick    String // "home" | "draw" | "away"
+  user    User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, matchId])
+}
+
+model BracketPick {
+  id     Int    @id @default(autoincrement())
+  userId Int
+  round  String // "R32" | "R16" | "QF" | "SF" | "Final"
+  slot   Int    // slot number within that round
+  team   String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, round, slot])
+}
+
+model ChampionPick {
+  id     Int    @id @default(autoincrement())
+  userId Int    @unique
+  team   String
+  user   User   @relation(fields: [userId], references: [id])
+}
+
+model MatchResult {
+  id        Int     @id @default(autoincrement())
+  matchId   String  @unique // "A1", "A2", etc.
+  homeGoals Int?
+  awayGoals Int?
+  result    String? // "home" | "draw" | "away" (null = not played)
+  status    String  @default("scheduled") // "scheduled" | "live" | "finished"
+}
