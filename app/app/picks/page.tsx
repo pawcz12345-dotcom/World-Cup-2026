@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import GroupOverview from '@/components/picks/GroupOverview';
 import GroupDetailModal from '@/components/picks/GroupDetailModal';
 import KnockoutBracket from '@/components/picks/KnockoutBracket';
+import ThirdsQualificationPanel from '@/components/picks/ThirdsQualificationPanel';
 import { GROUPS, GROUP_MATCHES, ALL_TEAMS, computeGroupStandings, getGroupMatches, getTeamMeta } from '@/lib/worldcup-data';
 import type { MatchOdds } from '@/app/api/odds/route';
 
@@ -13,6 +14,8 @@ export default function PicksPage() {
   const [matchPicks, setMatchPicks] = useState<Record<string, string>>({});
   const [bracketPicks, setBracketPicks] = useState<Record<string, string>>({});
   const [oddsMap, setOddsMap] = useState<Record<string, MatchOdds>>({});
+  const [kickoffTimes, setKickoffTimes] = useState<Record<string, string>>({});
+  const [tiebreakerPicks, setTiebreakerPicks] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -23,10 +26,11 @@ export default function PicksPage() {
   // Load saved picks on mount
   const fetchPicks = useCallback(async () => {
     try {
-      const [groupRes, bracketRes, oddsRes] = await Promise.all([
+      const [groupRes, bracketRes, oddsRes, tbRes] = await Promise.all([
         fetch('/api/picks/groups'),
         fetch('/api/picks/bracket'),
         fetch('/api/odds'),
+        fetch('/api/picks/tiebreakers'),
       ]);
       const groupData = await groupRes.json();
       if (groupData.picks) setMatchPicks(groupData.picks);
@@ -42,6 +46,10 @@ export default function PicksPage() {
 
       const oddsData = await oddsRes.json().catch(() => ({}));
       if (oddsData.odds) setOddsMap(oddsData.odds);
+      if (oddsData.kickoffTimes) setKickoffTimes(oddsData.kickoffTimes);
+
+      const tbData = await tbRes.json().catch(() => ({}));
+      if (tbData.picks) setTiebreakerPicks(tbData.picks);
     } catch (err) {
       console.error('Error loading picks', err);
     } finally {
@@ -89,14 +97,29 @@ export default function PicksPage() {
     setSaveStatus('saving');
     setMatchPicks({});
     setBracketPicks({});
+    setTiebreakerPicks({});
     try {
-      const [r1, r2] = await Promise.all([
+      const [r1, r2, r3] = await Promise.all([
         fetch('/api/picks/groups', { method: 'DELETE' }),
         fetch('/api/picks/bracket', { method: 'DELETE' }),
+        fetch('/api/picks/tiebreakers', { method: 'DELETE' }),
       ]);
-      r1.ok && r2.ok ? showSaved() : showError();
+      r1.ok && r2.ok && r3.ok ? showSaved() : showError();
     } catch {
       showError();
+    }
+  }
+
+  async function handleTiebreakerChange(groupId: string, teamOrder: string[]) {
+    setTiebreakerPicks((prev) => ({ ...prev, [groupId]: teamOrder }));
+    try {
+      await fetch('/api/picks/tiebreakers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId, teamOrder }),
+      });
+    } catch {
+      // non-critical — state is already updated
     }
   }
 
@@ -169,6 +192,40 @@ export default function PicksPage() {
     bracketTimers.current.set(timerKey, t);
   }
 
+  // Compute third-place standings for all groups (when all are complete).
+  // Returns null when not all groups are finished yet.
+  const thirdsInfo = useMemo(() => {
+    const thirdsOrder: string[] | undefined = tiebreakerPicks['thirds'];
+    const thirdsEntries: { team: string; pts: number; group: string }[] = [];
+
+    let allDone = true;
+    for (let gi = 0; gi < GROUPS.length; gi++) {
+      const g = GROUPS[gi];
+      const matches = getGroupMatches(g.id);
+      const pickedCount = matches.filter((m) => matchPicks[m.matchId]).length;
+      if (pickedCount < matches.length) { allDone = false; break; }
+      const rows = computeGroupStandings(g.id, matchPicks, tiebreakerPicks[g.id]);
+      if (rows[2]) thirdsEntries.push({ team: rows[2].team, pts: rows[2].pts, group: g.id });
+    }
+
+    if (!allDone) return null;
+
+    thirdsEntries.sort((a, b) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      if (thirdsOrder) {
+        const ai = thirdsOrder.indexOf(a.team);
+        const bi = thirdsOrder.indexOf(b.team);
+        if (ai !== -1 && bi !== -1) return ai - bi;
+      }
+      return a.team.localeCompare(b.team);
+    });
+
+    const hasTieAtCut = thirdsEntries.length >= 9 && thirdsEntries[7].pts === thirdsEntries[8].pts;
+    const isResolved = !hasTieAtCut || !!thirdsOrder;
+
+    return { thirds: thirdsEntries, hasTieAtCut, isResolved };
+  }, [matchPicks, tiebreakerPicks]);
+
   // Derive R32 matchups from completed group picks.
   // Only populates a slot when both contributing groups are fully picked.
   const r32Teams = useMemo((): Record<number, [string, string]> => {
@@ -179,7 +236,7 @@ export default function PicksPage() {
       const matches = getGroupMatches(g.id);
       const pickedCount = matches.filter((m) => matchPicks[m.matchId]).length;
       if (pickedCount === matches.length) {
-        const rows = computeGroupStandings(g.id, matchPicks);
+        const rows = computeGroupStandings(g.id, matchPicks, tiebreakerPicks[g.id]);
         standings[g.id] = rows.map((r) => r.team);
       }
     }
@@ -224,26 +281,17 @@ export default function PicksPage() {
     }
 
     // Slots 6, 7, 14, 15: best 3rd-place teams (need all 12 groups complete)
-    const allGroupsDone = GROUPS.every((g) => standings[g.id]);
-    if (allGroupsDone) {
-      const thirds: { team: string; pts: number }[] = [];
-      for (let gi = 0; gi < GROUPS.length; gi++) {
-        const g = GROUPS[gi];
-        const rows = computeGroupStandings(g.id, matchPicks);
-        if (rows[2]) {
-          thirds.push({ team: rows[2].team, pts: rows[2].pts });
-        }
-      }
-      thirds.sort((a, b) => b.pts - a.pts);
-      // Assign pairs: slots 6&7 = best 3rd #1 vs #2, slots 14&15 = #3 vs #4
-      if (thirds[0] && thirds[1]) result[6] = [thirds[0].team, thirds[1].team];
-      if (thirds[2] && thirds[3]) result[7] = [thirds[2].team, thirds[3].team];
-      if (thirds[4] && thirds[5]) result[14] = [thirds[4].team, thirds[5].team];
-      if (thirds[6] && thirds[7]) result[15] = [thirds[6].team, thirds[7].team];
+    // Only populate when tiebreaker is resolved (or no tie exists)
+    if (thirdsInfo && thirdsInfo.isResolved) {
+      const t = thirdsInfo.thirds;
+      if (t[0] && t[1]) result[6]  = [t[0].team, t[1].team];
+      if (t[2] && t[3]) result[7]  = [t[2].team, t[3].team];
+      if (t[4] && t[5]) result[14] = [t[4].team, t[5].team];
+      if (t[6] && t[7]) result[15] = [t[6].team, t[7].team];
     }
 
     return result;
-  }, [matchPicks]);
+  }, [matchPicks, tiebreakerPicks, thirdsInfo]);
 
   if (loading) {
     return (
@@ -298,15 +346,14 @@ export default function PicksPage() {
           <div className="mt-2 text-xs text-green-500">
             Correct: <span className="text-yellow-400 font-semibold">+1 pt</span>
             <span className="mx-1.5">·</span>
-            Wrong on decisive: <span className="text-red-400 font-semibold">-1 pt</span>
-            <span className="mx-1.5">·</span>
-            Match drew (no draw pick): <span className="text-green-400 font-semibold">0 pts</span>
+            Wrong: <span className="text-red-400 font-semibold">-1 pt</span>
           </div>
         </div>
 
         <GroupOverview
           groups={GROUPS}
           matchPicks={matchPicks}
+          tiebreakerPicks={tiebreakerPicks}
           onSelectGroup={setSelectedGroup}
         />
 
@@ -317,9 +364,24 @@ export default function PicksPage() {
             onPickChange={handleMatchPickChange}
             onClose={() => setSelectedGroup(null)}
             oddsMap={oddsMap}
+            kickoffTimes={kickoffTimes}
+            tiebreakerOrder={tiebreakerPicks[selectedGroup]}
+            onTiebreakerChange={(order) => handleTiebreakerChange(selectedGroup, order)}
           />
         )}
       </section>
+
+      {/* 3rd Place Tiebreaker — shown only when all groups done and a tie exists */}
+      {thirdsInfo && thirdsInfo.hasTieAtCut && (
+        <section>
+          <ThirdsQualificationPanel
+            thirds={thirdsInfo.thirds}
+            hasTieAtCut={thirdsInfo.hasTieAtCut}
+            tiebreakerOrder={tiebreakerPicks['thirds']}
+            onTiebreakerChange={(order) => handleTiebreakerChange('thirds', order)}
+          />
+        </section>
+      )}
 
       {/* Knockout Bracket */}
       <section>
