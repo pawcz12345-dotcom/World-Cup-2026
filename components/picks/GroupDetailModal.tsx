@@ -2,12 +2,8 @@
 
 import { useEffect, useCallback, useMemo } from 'react';
 import {
-  Group,
-  getGroupMatches,
-  getTeamMeta,
-  getFlagUrl,
-  isMatchLocked,
-  computeGroupStandings,
+  Group, getGroupMatches, getTeamMeta, getFlagUrl,
+  isMatchLocked, computeGroupStandings,
 } from '@/lib/worldcup-data';
 import type { MatchOdds } from '@/app/api/odds/route';
 
@@ -35,29 +31,18 @@ function shortenName(name: string): string {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function formatKickoff(isoStr: string) {
-  const d = new Date(isoStr);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+  return new Date(isoStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
 }
 
-function pct(p: number) {
-  return `${Math.round(p * 100)}%`;
-}
+function pct(p: number) { return `${Math.round(p * 100)}%`; }
 
 export default function GroupDetailModal({
-  group,
-  matchPicks,
-  onPickChange,
-  onClose,
-  oddsMap = {},
-  kickoffTimes = {},
-  advancementScores,
+  group, matchPicks, onPickChange, onClose,
+  oddsMap = {}, kickoffTimes = {}, advancementScores,
 }: GroupDetailModalProps) {
   const matches = getGroupMatches(group.id);
   const pickedCount = matches.filter((m) => matchPicks[m.matchId]).length;
@@ -68,48 +53,34 @@ export default function GroupDetailModal({
   );
 
   const hasAnyPick = pickedCount > 0;
+  const hasPolymarket = matches.some((m) => oddsMap[m.matchId]?.source === 'polymarket');
 
-  const handleKey = useCallback(
-    (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); },
-    [onClose]
-  );
-
+  const handleKey = useCallback((e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }, [onClose]);
   useEffect(() => {
     document.addEventListener('keydown', handleKey);
     document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', handleKey);
-      document.body.style.overflow = '';
-    };
+    return () => { document.removeEventListener('keydown', handleKey); document.body.style.overflow = ''; };
   }, [handleKey]);
-
-  const hasPolymarket = matches.some((m) => oddsMap[m.matchId]?.source === 'polymarket');
 
   return (
     <>
       <div className="fixed inset-0 bg-black/80 z-50" onClick={onClose} aria-hidden="true" />
 
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${group.name} match picks`}
-        className="fixed inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center z-50 p-0 sm:p-4"
-      >
-        <div className="bg-green-950 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xl max-h-[92vh] flex flex-col shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-label={`${group.name} match picks`}
+        className="fixed inset-x-0 bottom-0 sm:inset-0 sm:flex sm:items-center sm:justify-center z-50 p-0 sm:p-4">
+        <div className="bg-wc-navy-950 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-xl max-h-[92vh] flex flex-col shadow-2xl border border-wc-navy-800">
 
           {/* Header */}
-          <div className="sticky top-0 bg-green-950 border-b border-green-800 px-5 py-4 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+          <div className="sticky top-0 bg-wc-navy-950 border-b border-wc-navy-800 px-5 py-4 flex items-center justify-between rounded-t-2xl flex-shrink-0">
             <div>
-              <h2 className="text-yellow-400 font-bold text-lg tracking-wide">{group.name}</h2>
-              <p className="text-green-500 text-xs mt-0.5">
-                {pickedCount}/{matches.length} picks made · correct +1 · wrong -1
+              <h2 className="text-wc-gold-400 font-bold text-lg tracking-wide">{group.name}</h2>
+              <p className="text-wc-navy-400 text-xs mt-0.5">
+                {pickedCount}/{matches.length} picks · correct +1 · wrong −1
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-green-500 hover:text-white transition-colors p-1 rounded-lg hover:bg-green-800"
-              aria-label="Close"
-            >
+            <button onClick={onClose}
+              className="text-wc-navy-500 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-wc-navy-800"
+              aria-label="Close">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -118,20 +89,15 @@ export default function GroupDetailModal({
 
           <div className="overflow-y-auto flex-1 p-4 space-y-4">
 
-            {/* Live standings table */}
-            <div className="rounded-xl border border-green-800 overflow-hidden">
-              <div className="bg-green-900/60 px-3 py-2 flex items-center justify-between">
-                <span className="text-yellow-400 text-xs font-bold uppercase tracking-wider">
-                  Predicted Standings
-                </span>
-                {!hasAnyPick && (
-                  <span className="text-green-600 text-[11px]">Pick matches below to update</span>
-                )}
+            {/* Standings */}
+            <div className="rounded-xl border border-wc-navy-700 overflow-hidden">
+              <div className="bg-wc-navy-800 px-3 py-2 flex items-center justify-between">
+                <span className="text-wc-gold-400 text-xs font-bold uppercase tracking-wider">Predicted Standings</span>
+                {!hasAnyPick && <span className="text-wc-navy-500 text-[11px]">Pick matches below to update</span>}
               </div>
-
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="text-green-500 border-b border-green-800/60">
+                  <tr className="text-wc-navy-500 border-b border-wc-navy-700/60">
                     <th className="text-left py-1.5 px-3 font-medium">#</th>
                     <th className="text-left py-1.5 pl-0 font-medium">Team</th>
                     <th className="text-center py-1.5 font-medium w-7">P</th>
@@ -146,41 +112,29 @@ export default function GroupDetailModal({
                     const meta = getTeamMeta(row.team);
                     const advances = i < 2;
                     return (
-                      <tr
-                        key={row.team}
-                        className={`border-b border-green-800/40 last:border-0 ${advances ? 'bg-yellow-500/5' : ''}`}
-                      >
+                      <tr key={row.team}
+                        className={`border-b border-wc-navy-700/30 last:border-0 ${advances ? 'bg-wc-gold-400/5' : ''}`}>
                         <td className="py-1.5 px-3">
-                          <span className={`font-bold ${advances ? 'text-yellow-400' : 'text-green-600'}`}>
-                            {i + 1}
-                          </span>
+                          <span className={`font-bold ${advances ? 'text-wc-gold-400' : 'text-wc-navy-600'}`}>{i + 1}</span>
                         </td>
                         <td className="py-1.5 pl-0">
                           <div className="flex items-center gap-1.5">
-                            <img
-                              src={getFlagUrl(meta.flag)}
-                              alt={row.team}
-                              className="w-5 h-3.5 object-cover rounded-sm flex-shrink-0"
-                            />
-                            <span className={`font-medium ${advances ? 'text-white' : 'text-green-300'}`}>
-                              {shortenName(row.team)}
-                            </span>
-                            {advances && row.pts > 0 && (
-                              <span className="text-[10px] text-yellow-500 font-semibold ml-0.5">↑</span>
-                            )}
+                            <img src={getFlagUrl(meta.flag)} alt={row.team} className="w-5 h-3.5 object-cover rounded-sm flex-shrink-0" />
+                            <span className={`font-medium ${advances ? 'text-white' : 'text-wc-navy-300'}`}>{shortenName(row.team)}</span>
+                            {advances && row.pts > 0 && <span className="text-[10px] text-wc-gold-500 ml-0.5">↑</span>}
                           </div>
                         </td>
-                        <td className="py-1.5 text-center text-green-400">{row.p}</td>
-                        <td className="py-1.5 text-center text-green-300">{row.w}</td>
-                        <td className="py-1.5 text-center text-green-400">{row.d}</td>
-                        <td className="py-1.5 text-center text-green-500">{row.l}</td>
-                        <td className="py-1.5 text-center pr-1 font-bold text-yellow-400">{row.pts}</td>
+                        <td className="py-1.5 text-center text-wc-navy-400">{row.p}</td>
+                        <td className="py-1.5 text-center text-wc-navy-300">{row.w}</td>
+                        <td className="py-1.5 text-center text-wc-navy-400">{row.d}</td>
+                        <td className="py-1.5 text-center text-wc-navy-500">{row.l}</td>
+                        <td className="py-1.5 text-center pr-1 font-bold text-wc-gold-400">{row.pts}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
-              <div className="bg-green-900/30 px-3 py-1.5 text-[10px] text-green-600">
+              <div className="bg-wc-navy-800/50 px-3 py-1.5 text-[10px] text-wc-navy-500">
                 Top 2 advance · Best 8 third-place also advance · Ties broken by Polymarket odds
               </div>
             </div>
@@ -196,31 +150,27 @@ export default function GroupDetailModal({
               const awayMeta = getTeamMeta(match.away);
 
               return (
-                <div
-                  key={match.matchId}
+                <div key={match.matchId}
                   className={`rounded-xl border p-4 transition-colors ${
                     locked
-                      ? 'border-green-900 bg-green-900/30 opacity-70'
+                      ? 'border-wc-navy-800 bg-wc-navy-900/40 opacity-70'
                       : pick
-                      ? 'border-yellow-700/50 bg-green-900/60'
-                      : 'border-green-800 bg-green-900/60'
-                  }`}
-                >
-                  <div className="flex justify-between items-center text-[11px] text-green-600 mb-3">
+                      ? 'border-wc-blue-700/40 bg-wc-navy-800/60'
+                      : 'border-wc-navy-700 bg-wc-navy-800/40'
+                  }`}>
+                  <div className="flex justify-between items-center text-[11px] text-wc-navy-500 mb-3">
                     <div className="flex items-center gap-1.5">
                       <span>{formatDate(match.date)}</span>
                       {kickoffTimes[match.matchId] && (
-                        <span className="text-green-500">· {formatKickoff(kickoffTimes[match.matchId])}</span>
+                        <span className="text-wc-navy-400">· {formatKickoff(kickoffTimes[match.matchId])}</span>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="truncate">{match.city}</span>
                       {isPolymarket && (
-                        <span className="text-[10px] bg-purple-900/60 text-purple-300 px-1.5 py-0.5 rounded font-medium">
-                          Polymarket
-                        </span>
+                        <span className="text-[10px] bg-wc-blue-900/60 text-wc-blue-300 px-1.5 py-0.5 rounded font-medium">Polymarket</span>
                       )}
-                      {locked && <span className="text-yellow-600 font-semibold">LOCKED</span>}
+                      {locked && <span className="text-wc-red-400 font-semibold text-[10px] uppercase">Locked</span>}
                     </div>
                   </div>
 
@@ -228,39 +178,34 @@ export default function GroupDetailModal({
                     <div className="text-center">
                       <img src={getFlagUrl(homeMeta.flag)} alt={match.home} className="w-10 h-7 object-cover rounded mx-auto mb-1" />
                       <div className="text-sm font-semibold text-white leading-tight">{shortenName(match.home)}</div>
-                      <div className="text-[11px] text-green-500">#{homeMeta.fifaRank}</div>
+                      <div className="text-[11px] text-wc-navy-500">#{homeMeta.fifaRank}</div>
                     </div>
-                    <div className="text-center text-green-600 font-bold text-xs">VS</div>
+                    <div className="text-center text-wc-navy-600 font-bold text-xs">VS</div>
                     <div className="text-center">
                       <img src={getFlagUrl(awayMeta.flag)} alt={match.away} className="w-10 h-7 object-cover rounded mx-auto mb-1" />
                       <div className="text-sm font-semibold text-white leading-tight">{shortenName(match.away)}</div>
-                      <div className="text-[11px] text-green-500">#{awayMeta.fifaRank}</div>
+                      <div className="text-[11px] text-wc-navy-500">#{awayMeta.fifaRank}</div>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
-                    {(
-                      [
-                        { key: 'home' as const, label: shortenName(match.home), prob: probs?.home ?? null },
-                        { key: 'draw' as const, label: 'Draw',                  prob: probs?.draw ?? null },
-                        { key: 'away' as const, label: shortenName(match.away), prob: probs?.away ?? null },
-                      ]
-                    ).map(({ key, label, prob }) => (
-                      <button
-                        key={key}
-                        disabled={locked}
+                    {([
+                      { key: 'home' as const, label: shortenName(match.home), prob: probs?.home ?? null },
+                      { key: 'draw' as const, label: 'Draw',                  prob: probs?.draw ?? null },
+                      { key: 'away' as const, label: shortenName(match.away), prob: probs?.away ?? null },
+                    ]).map(({ key, label, prob }) => (
+                      <button key={key} disabled={locked}
                         onClick={() => !locked && onPickChange(match.matchId, key)}
                         className={`py-2.5 px-1 rounded-lg text-center transition-all select-none ${
                           pick === key
-                            ? 'bg-yellow-500 text-black font-bold shadow-lg shadow-yellow-900/40'
+                            ? 'bg-wc-blue-500 text-white font-bold shadow-lg shadow-wc-blue-900/40'
                             : locked
-                            ? 'bg-green-800/40 text-green-600 cursor-not-allowed'
-                            : 'bg-green-800 hover:bg-green-700 text-white cursor-pointer'
-                        }`}
-                      >
+                            ? 'bg-wc-navy-800/40 text-wc-navy-600 cursor-not-allowed'
+                            : 'bg-wc-navy-700 hover:bg-wc-navy-600 text-white cursor-pointer'
+                        }`}>
                         <div className="text-xs font-semibold truncate">{label}</div>
                         {prob !== null && (
-                          <div className={`text-[13px] font-mono font-bold mt-0.5 ${pick === key ? 'text-black/70' : 'text-green-300'}`}>
+                          <div className={`text-[13px] font-mono font-bold mt-0.5 ${pick === key ? 'text-white/70' : 'text-wc-navy-300'}`}>
                             {pct(prob)}
                           </div>
                         )}
@@ -272,16 +217,11 @@ export default function GroupDetailModal({
             })}
           </div>
 
-          <div className="flex-shrink-0 border-t border-green-800 px-5 py-3 flex justify-between items-center">
-            <span className="text-[11px] text-green-600">
+          <div className="flex-shrink-0 border-t border-wc-navy-800 px-5 py-3 flex justify-between items-center">
+            <span className="text-[11px] text-wc-navy-500">
               {hasPolymarket ? 'Odds: Polymarket prediction market' : 'Odds not yet available'}
             </span>
-            <button
-              onClick={onClose}
-              className="bg-yellow-600 hover:bg-yellow-500 text-black font-bold px-4 py-1.5 rounded-lg transition-colors text-xs"
-            >
-              Done
-            </button>
+            <button onClick={onClose} className="btn-primary text-xs py-1.5 px-4">Done</button>
           </div>
         </div>
       </div>

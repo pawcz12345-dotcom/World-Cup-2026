@@ -77,7 +77,7 @@ function SortableTeamRow({
       ref={setNodeRef}
       style={style}
       className={`flex items-center gap-2 py-1.5 px-2 rounded-lg transition-colors ${
-        isDragging ? 'bg-wc-green-700 shadow-lg' : 'hover:bg-wc-green-800/50'
+        isDragging ? 'bg-wc-navy-700 shadow-lg' : 'hover:bg-wc-navy-800/50'
       }`}
     >
       {/* Drag handle */}
@@ -85,7 +85,7 @@ function SortableTeamRow({
         <button
           {...attributes}
           {...listeners}
-          className="text-wc-green-500 hover:text-wc-green-300 cursor-grab active:cursor-grabbing touch-none select-none"
+          className="text-wc-navy-500 hover:text-wc-navy-300 cursor-grab active:cursor-grabbing touch-none select-none"
           aria-label="Drag to reorder"
         >
           ⋮⋮
@@ -93,13 +93,13 @@ function SortableTeamRow({
       )}
 
       {/* Rank number */}
-      <span className="w-5 text-xs text-wc-green-400 font-mono text-center select-none">
+      <span className="w-5 text-xs text-wc-navy-400 font-mono text-center select-none">
         {rank}
       </span>
 
       {/* Qualified badge */}
       {isQualified ? (
-        <span className="text-xs font-bold bg-green-700 text-green-200 px-1.5 py-0.5 rounded select-none">
+        <span className="text-xs font-bold bg-wc-blue-700 text-wc-blue-200 px-1.5 py-0.5 rounded select-none">
           Q
         </span>
       ) : (
@@ -120,7 +120,7 @@ function SortableTeamRow({
           <button
             onClick={onMoveUp}
             disabled={isFirst}
-            className="w-5 h-4 flex items-center justify-center text-wc-green-400 hover:text-wc-gold-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-xs leading-none"
+            className="w-5 h-4 flex items-center justify-center text-wc-navy-400 hover:text-wc-gold-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-xs leading-none"
             aria-label="Move up"
           >
             ▲
@@ -128,7 +128,7 @@ function SortableTeamRow({
           <button
             onClick={onMoveDown}
             disabled={isLast}
-            className="w-5 h-4 flex items-center justify-center text-wc-green-400 hover:text-wc-gold-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-xs leading-none"
+            className="w-5 h-4 flex items-center justify-center text-wc-navy-400 hover:text-wc-gold-400 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-xs leading-none"
             aria-label="Move down"
           >
             ▼
@@ -198,9 +198,9 @@ export default function GroupCard({ group, picks, onChange, locked }: GroupCardP
   }
 
   return (
-    <div className="bg-wc-green-900 border border-wc-green-700 rounded-xl overflow-hidden">
+    <div className="bg-wc-navy-900 border border-wc-navy-700 rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="bg-wc-green-800 px-3 py-2 border-b border-wc-green-700">
+      <div className="bg-wc-navy-800 px-3 py-2 border-b border-wc-navy-700">
         <h3 className="text-wc-gold-400 font-bold text-sm tracking-wide">
           {group.name}
         </h3>

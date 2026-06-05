@@ -83,7 +83,7 @@ export default async function DashboardPage() {
             </div>
             <div className="w-full bg-wc-navy-800 rounded-full h-1.5">
               <div
-                className={`h-1.5 rounded-full transition-all ${matchPicksCount === totalMatches ? 'bg-wc-green-400' : 'bg-wc-gold-400'}`}
+                className={`h-1.5 rounded-full transition-all ${matchPicksCount === totalMatches ? 'bg-wc-green-400' : 'bg-wc-blue-500'}`}
                 style={{ width: `${picksPct}%` }}
               />
             </div>

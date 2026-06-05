@@ -42,8 +42,8 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-wc-navy-950 px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-wc-gold-400 mb-5 shadow-lg shadow-wc-gold-900/50">
-            <svg className="w-7 h-7 text-wc-navy-950" fill="currentColor" viewBox="0 0 24 24">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-wc-blue-500 mb-5 shadow-lg shadow-wc-blue-900/50">
+            <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2a10 10 0 100 20A10 10 0 0012 2zm0 2c1.85 0 3.56.63 4.93 1.68L5.68 16.93A7.95 7.95 0 014 12c0-4.41 3.59-8 8-8zm0 16a7.95 7.95 0 01-4.93-1.68L18.32 7.07A7.95 7.95 0 0120 12c0 4.41-3.59 8-8 8z"/>
             </svg>
           </div>

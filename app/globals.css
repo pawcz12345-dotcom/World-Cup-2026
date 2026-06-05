@@ -15,10 +15,10 @@
 }
 
 @layer components {
-  /* Primary CTA — trophy gold */
+  /* Primary CTA — FIFA sky blue */
   .btn-primary {
-    @apply bg-wc-gold-400 hover:bg-wc-gold-300 active:bg-wc-gold-500
-           text-wc-navy-950 font-semibold text-sm py-2.5 px-5
+    @apply bg-wc-blue-500 hover:bg-wc-blue-400 active:bg-wc-blue-600
+           text-white font-semibold text-sm py-2.5 px-5
            rounded-lg tracking-wide transition-all duration-150
            disabled:opacity-40 disabled:cursor-not-allowed;
   }
@@ -36,23 +36,18 @@
     @apply bg-wc-navy-900 border border-wc-navy-700 rounded-2xl p-5;
   }
 
-  /* Elevated card */
-  .card-elevated {
-    @apply bg-wc-navy-800 border border-wc-navy-700 rounded-2xl p-5;
-  }
-
   /* Inputs */
   .input-field {
     @apply bg-wc-navy-800 border border-wc-navy-700
            text-white rounded-lg px-4 py-2.5 w-full
-           focus:outline-none focus:ring-2 focus:ring-wc-gold-400/50
-           focus:border-wc-gold-500
-           placeholder-wc-navy-400
+           focus:outline-none focus:ring-2 focus:ring-wc-blue-500/40
+           focus:border-wc-blue-600
+           placeholder-wc-navy-500
            transition-colors duration-150;
   }
 
-  /* Label */
+  /* Field label */
   .field-label {
-    @apply block text-xs font-semibold text-wc-navy-300 uppercase tracking-wider mb-1.5;
+    @apply block text-xs font-semibold text-wc-navy-400 uppercase tracking-wider mb-1.5;
   }
 }

@@ -38,30 +38,21 @@ function getSlotLabel(round: string, slot: number): string {
   return found?.label ?? `${round} #${slot}`;
 }
 
-/**
- * Compute "effective picks": a pick is only valid if the team is one of the
- * two feeders for that slot. Stale picks from changed upstream choices are
- * silently excluded so they don't propagate forward.
- */
 function computeEffectivePicks(
   rawPicks: Record<string, string>,
   r32Teams: Record<number, [string, string]>
 ): Record<string, string> {
   const eff: Record<string, string> = {};
-
-  // R32: valid if team is in r32Teams[slot]
   for (let slot = 0; slot < 16; slot++) {
     const key = `R32-${slot}`;
     const teams = r32Teams[slot];
     if (!rawPicks[key]) continue;
     if (!teams) {
-      eff[key] = rawPicks[key]; // no group data yet — keep manual pick
+      eff[key] = rawPicks[key];
     } else if (rawPicks[key] === teams[0] || rawPicks[key] === teams[1]) {
       eff[key] = rawPicks[key];
     }
   }
-
-  // R16 → Final: valid if team matches one of the two upstream effective picks
   for (let ri = 1; ri < ROUND_ORDER.length; ri++) {
     const round = ROUND_ORDER[ri];
     const prevRound = ROUND_ORDER[ri - 1];
@@ -75,25 +66,17 @@ function computeEffectivePicks(
       }
     }
   }
-
   return eff;
 }
 
-/**
- * For each slot, the two teams available to click:
- * - R32: from r32Teams (group qualifiers)
- * - R16+: from the two upstream effective picks
- */
 function computeSlotTeams(
   effectivePicks: Record<string, string>,
   r32Teams: Record<number, [string, string]>
 ): Record<string, [string, string]> {
   const slotTeams: Record<string, [string, string]> = {};
-
   for (let slot = 0; slot < 16; slot++) {
     if (r32Teams[slot]) slotTeams[`R32-${slot}`] = r32Teams[slot];
   }
-
   for (let ri = 1; ri < ROUND_ORDER.length; ri++) {
     const round = ROUND_ORDER[ri];
     const prevRound = ROUND_ORDER[ri - 1];
@@ -104,15 +87,10 @@ function computeSlotTeams(
       if (t1 && t2) slotTeams[`${round}-${slot}`] = [t1, t2];
     }
   }
-
   return slotTeams;
 }
 
-// ─── Team button ──────────────────────────────────────────────────────────────
-
-function TeamButton({
-  team, isSelected, onClick, disabled,
-}: {
+function TeamButton({ team, isSelected, onClick, disabled }: {
   team: string; isSelected: boolean; onClick: () => void; disabled: boolean;
 }) {
   const meta = getTeamMeta(team);
@@ -122,32 +100,25 @@ function TeamButton({
       onClick={onClick}
       className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 px-0.5 rounded transition-colors ${
         isSelected
-          ? 'bg-yellow-500 text-black'
+          ? 'bg-wc-blue-500 text-white'
           : disabled
-          ? 'bg-green-900/40 text-green-600 cursor-not-allowed'
-          : 'bg-green-800 hover:bg-green-700 text-white cursor-pointer'
+          ? 'bg-wc-navy-800/60 text-wc-navy-600 cursor-not-allowed'
+          : 'bg-wc-navy-700 hover:bg-wc-navy-600 text-white cursor-pointer'
       }`}
     >
-      <img
-        src={getFlagUrl(meta.flag)}
-        alt={team}
-        className="w-5 h-3.5 object-cover rounded-sm flex-shrink-0"
-      />
+      <img src={getFlagUrl(meta.flag)} alt={team} className="w-5 h-3.5 object-cover rounded-sm flex-shrink-0" />
       <span className="text-[10px] font-semibold w-full text-center leading-tight truncate px-0.5">
         {shortBracketName(team)}
       </span>
-      <span className={`text-[9px] leading-tight ${isSelected ? 'text-black/60' : 'text-green-400'}`}>
+      <span className={`text-[9px] leading-tight ${isSelected ? 'text-white/60' : 'text-wc-navy-400'}`}>
         #{meta.fifaRank}
       </span>
     </button>
   );
 }
 
-// ─── Match slot ───────────────────────────────────────────────────────────────
-
 interface MatchSlotProps {
-  round: string;
-  slot: number;
+  round: string; slot: number;
   effectivePicks: Record<string, string>;
   slotTeams: Record<string, [string, string]>;
   onChange: (round: string, slot: number, team: string) => void;
@@ -163,77 +134,54 @@ function MatchSlot({ round, slot, effectivePicks, slotTeams, onChange, locked }:
 
   return (
     <div className={`rounded-lg border text-xs w-full transition-colors ${
-      selected ? 'border-yellow-600/70 bg-green-800/60' : 'border-green-700 bg-green-900/70'
+      selected ? 'border-wc-blue-600/60 bg-wc-navy-800' : 'border-wc-navy-700 bg-wc-navy-900/80'
     }`}>
-      <div className="px-1.5 py-0.5 text-green-600 border-b border-green-700/40 truncate text-[9px] leading-tight">
+      <div className="px-1.5 py-0.5 text-wc-navy-500 border-b border-wc-navy-700/50 truncate text-[9px] leading-tight">
         {label}
       </div>
-
       {locked ? (
         <div className="px-2 py-1.5 flex items-center gap-1.5">
           {selectedMeta && (
             <img src={getFlagUrl(selectedMeta.flag)} alt={selected!} className="w-4 h-3 object-cover rounded-sm" />
           )}
-          <span className={`text-[10px] ${selected ? 'text-yellow-300 font-semibold' : 'text-green-600'}`}>
+          <span className={`text-[10px] ${selected ? 'text-wc-blue-300 font-semibold' : 'text-wc-navy-500'}`}>
             {selected ? shortBracketName(selected) : 'Locked'}
           </span>
         </div>
       ) : teams ? (
         <div className="flex gap-1 p-1">
           {teams.map((team) => (
-            <TeamButton
-              key={team}
-              team={team}
-              isSelected={selected === team}
-              onClick={() => onChange(round, slot, team)}
-              disabled={false}
-            />
+            <TeamButton key={team} team={team} isSelected={selected === team}
+              onClick={() => onChange(round, slot, team)} disabled={false} />
           ))}
         </div>
       ) : selected ? (
-        // Has a pick but feeders aren't both resolved yet
         <div className="px-2 py-1.5 flex items-center gap-1.5">
           {selectedMeta && (
             <img src={getFlagUrl(selectedMeta.flag)} alt={selected} className="w-4 h-3 object-cover rounded-sm" />
           )}
           <div>
-            <div className="text-yellow-300 font-semibold text-[10px]">{shortBracketName(selected)}</div>
-            {selectedMeta && <div className="text-green-500 text-[9px]">#{selectedMeta.fifaRank}</div>}
+            <div className="text-wc-blue-300 font-semibold text-[10px]">{shortBracketName(selected)}</div>
+            {selectedMeta && <div className="text-wc-navy-400 text-[9px]">#{selectedMeta.fifaRank}</div>}
           </div>
         </div>
       ) : (
-        <div className="px-2 py-2.5 text-center text-green-700 text-[10px]">
-          Awaiting…
-        </div>
+        <div className="px-2 py-2.5 text-center text-wc-navy-600 text-[10px]">Awaiting…</div>
       )}
     </div>
   );
 }
 
-// ─── Half bracket ─────────────────────────────────────────────────────────────
+const LEFT_HALF: Record<string, number[]> = { R32: [0,1,2,3,4,5,6,7], R16: [0,1,2,3], QF: [0,1], SF: [0] };
+const RIGHT_HALF: Record<string, number[]> = { R32: [8,9,10,11,12,13,14,15], R16: [4,5,6,7], QF: [2,3], SF: [1] };
 
-const LEFT_HALF: Record<string, number[]> = {
-  R32: [0, 1, 2, 3, 4, 5, 6, 7],
-  R16: [0, 1, 2, 3],
-  QF: [0, 1],
-  SF: [0],
-};
-const RIGHT_HALF: Record<string, number[]> = {
-  R32: [8, 9, 10, 11, 12, 13, 14, 15],
-  R16: [4, 5, 6, 7],
-  QF: [2, 3],
-  SF: [1],
-};
-
-interface HalfBracketProps {
+function HalfBracket({ side, effectivePicks, slotTeams, onChange, locked }: {
   side: 'left' | 'right';
   effectivePicks: Record<string, string>;
   slotTeams: Record<string, [string, string]>;
   onChange: (round: string, slot: number, team: string) => void;
   locked: boolean;
-}
-
-function HalfBracket({ side, effectivePicks, slotTeams, onChange, locked }: HalfBracketProps) {
+}) {
   const halfMap = side === 'left' ? LEFT_HALF : RIGHT_HALF;
   const rounds = side === 'left'
     ? (['R32', 'R16', 'QF', 'SF'] as const)
@@ -244,30 +192,16 @@ function HalfBracket({ side, effectivePicks, slotTeams, onChange, locked }: Half
       {rounds.map((round) => {
         const slots = halfMap[round] ?? [];
         const isR32 = round === 'R32';
-        const matchCount = slots.length;
         return (
-          <div
-            key={round}
-            className="flex flex-col justify-around gap-1"
-            style={{ minWidth: isR32 ? '118px' : '108px' }}
-          >
-            <div className="text-center text-green-500 text-[11px] font-semibold pb-1 border-b border-green-800">
+          <div key={round} className="flex flex-col justify-around gap-1" style={{ minWidth: isR32 ? '118px' : '108px' }}>
+            <div className="text-center text-wc-blue-400 text-[11px] font-semibold pb-1 border-b border-wc-navy-700">
               {round}
             </div>
-            <div
-              className="flex flex-col justify-around flex-1 gap-1.5"
-              style={{ minHeight: `${matchCount * 72}px` }}
-            >
+            <div className="flex flex-col justify-around flex-1 gap-1.5" style={{ minHeight: `${slots.length * 72}px` }}>
               {slots.map((slot) => (
-                <MatchSlot
-                  key={`${round}-${slot}`}
-                  round={round}
-                  slot={slot}
-                  effectivePicks={effectivePicks}
-                  slotTeams={slotTeams}
-                  onChange={onChange}
-                  locked={locked}
-                />
+                <MatchSlot key={`${round}-${slot}`} round={round} slot={slot}
+                  effectivePicks={effectivePicks} slotTeams={slotTeams}
+                  onChange={onChange} locked={locked} />
               ))}
             </div>
           </div>
@@ -277,128 +211,108 @@ function HalfBracket({ side, effectivePicks, slotTeams, onChange, locked }: Half
   );
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
-
-export default function KnockoutBracket({
-  picks, onChange, locked, allTeams, r32Teams = {},
-}: KnockoutBracketProps) {
+export default function KnockoutBracket({ picks, onChange, locked, allTeams, r32Teams = {} }: KnockoutBracketProps) {
   const effectivePicks = computeEffectivePicks(picks, r32Teams);
   const slotTeams = computeSlotTeams(effectivePicks, r32Teams);
 
   const finalist1 = effectivePicks['SF-0'] ?? null;
   const finalist2 = effectivePicks['SF-1'] ?? null;
-  const champion = effectivePicks['Final-0'] ?? null;
+  const champion  = effectivePicks['Final-0'] ?? null;
   const finalTeams = slotTeams['Final-0'] ?? null;
 
-  const f1Meta = finalist1 ? getTeamMeta(finalist1) : null;
-  const f2Meta = finalist2 ? getTeamMeta(finalist2) : null;
-  const champMeta = champion ? getTeamMeta(champion) : null;
+  const f1Meta    = finalist1 ? getTeamMeta(finalist1) : null;
+  const f2Meta    = finalist2 ? getTeamMeta(finalist2) : null;
+  const champMeta = champion  ? getTeamMeta(champion)  : null;
 
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[920px] px-2 pb-4">
         <div className="flex items-start gap-2 justify-center">
 
-          {/* Left half */}
-          <HalfBracket
-            side="left"
-            effectivePicks={effectivePicks}
-            slotTeams={slotTeams}
-            onChange={onChange}
-            locked={locked}
-          />
+          <HalfBracket side="left" effectivePicks={effectivePicks} slotTeams={slotTeams} onChange={onChange} locked={locked} />
 
-          {/* ── Center: Final ── */}
-          <div
-            className="flex flex-col items-center justify-center self-stretch"
-            style={{ minWidth: '158px' }}
-          >
-            <div className="text-yellow-400 font-bold text-sm text-center mb-3 tracking-wide">
-              FINAL
+          {/* Center: Final */}
+          <div className="flex flex-col items-center justify-center self-stretch" style={{ minWidth: '158px' }}>
+            <div className="text-wc-gold-400 font-bold text-sm text-center mb-3 tracking-widest uppercase">
+              Final
             </div>
 
-            {/* Finalist 1 (left SF winner) */}
+            {/* Finalist 1 */}
             <div className={`w-full rounded-lg border px-3 py-2 mb-1 transition-colors ${
-              finalist1 ? 'border-yellow-600 bg-green-800' : 'border-green-700 bg-green-900/80'
+              finalist1 ? 'border-wc-gold-600/50 bg-wc-navy-800' : 'border-wc-navy-700 bg-wc-navy-900/80'
             }`}>
               {f1Meta ? (
                 <div className="flex items-center gap-2">
                   <img src={getFlagUrl(f1Meta.flag)} alt={finalist1!} className="w-6 h-4 object-cover rounded-sm flex-shrink-0" />
                   <div className="min-w-0">
-                    <div className="text-yellow-300 font-semibold text-xs truncate">{shortBracketName(finalist1!)}</div>
-                    <div className="text-green-400 text-[10px]">#{f1Meta.fifaRank}</div>
+                    <div className="text-white font-semibold text-xs truncate">{shortBracketName(finalist1!)}</div>
+                    <div className="text-wc-navy-400 text-[10px]">#{f1Meta.fifaRank}</div>
                   </div>
                 </div>
               ) : (
-                <span className="text-green-500 text-xs">SF1 winner</span>
+                <span className="text-wc-navy-500 text-xs">SF1 winner</span>
               )}
             </div>
 
-            <div className="text-green-600 text-xs text-center my-1">vs</div>
+            <div className="text-wc-navy-500 text-xs text-center my-1">vs</div>
 
-            {/* Finalist 2 (right SF winner) */}
+            {/* Finalist 2 */}
             <div className={`w-full rounded-lg border px-3 py-2 mb-3 transition-colors ${
-              finalist2 ? 'border-yellow-600 bg-green-800' : 'border-green-700 bg-green-900/80'
+              finalist2 ? 'border-wc-gold-600/50 bg-wc-navy-800' : 'border-wc-navy-700 bg-wc-navy-900/80'
             }`}>
               {f2Meta ? (
                 <div className="flex items-center gap-2">
                   <img src={getFlagUrl(f2Meta.flag)} alt={finalist2!} className="w-6 h-4 object-cover rounded-sm flex-shrink-0" />
                   <div className="min-w-0">
-                    <div className="text-yellow-300 font-semibold text-xs truncate">{shortBracketName(finalist2!)}</div>
-                    <div className="text-green-400 text-[10px]">#{f2Meta.fifaRank}</div>
+                    <div className="text-white font-semibold text-xs truncate">{shortBracketName(finalist2!)}</div>
+                    <div className="text-wc-navy-400 text-[10px]">#{f2Meta.fifaRank}</div>
                   </div>
                 </div>
               ) : (
-                <span className="text-green-500 text-xs">SF2 winner</span>
+                <span className="text-wc-navy-500 text-xs">SF2 winner</span>
               )}
             </div>
 
             {/* Champion pick */}
             <div className="w-full">
-              <div className="text-yellow-400 text-xs font-bold text-center mb-1.5">CHAMPION</div>
+              <div className="text-wc-gold-400 text-xs font-bold text-center mb-1.5 uppercase tracking-widest">Champion</div>
               {locked ? (
                 <div className={`rounded-lg border px-3 py-2 text-center ${
-                  champion ? 'border-yellow-500 bg-yellow-900/30' : 'border-green-700 bg-green-900'
+                  champion ? 'border-wc-gold-600/50 bg-wc-gold-400/10' : 'border-wc-navy-700 bg-wc-navy-900'
                 }`}>
                   {champMeta ? (
                     <div className="flex items-center justify-center gap-2">
                       <img src={getFlagUrl(champMeta.flag)} alt={champion!} className="w-6 h-4 object-cover rounded-sm" />
                       <div className="text-left">
-                        <div className="text-yellow-300 font-bold text-xs">{shortBracketName(champion!)}</div>
-                        <div className="text-green-400 text-[10px]">#{champMeta.fifaRank}</div>
+                        <div className="text-wc-gold-300 font-bold text-xs">{shortBracketName(champion!)}</div>
+                        <div className="text-wc-navy-400 text-[10px]">#{champMeta.fifaRank}</div>
                       </div>
                     </div>
                   ) : (
-                    <span className="text-green-500 text-xs">Locked</span>
+                    <span className="text-wc-navy-500 text-xs">Locked</span>
                   )}
                 </div>
               ) : finalTeams ? (
                 <div className={`rounded-lg border transition-colors ${
-                  champion ? 'border-yellow-500 bg-yellow-900/20' : 'border-green-700 bg-green-900'
+                  champion ? 'border-wc-gold-600/50 bg-wc-gold-400/10' : 'border-wc-navy-700 bg-wc-navy-900'
                 }`}>
                   <div className="flex gap-1 p-1">
                     {finalTeams.map((team) => (
-                      <TeamButton
-                        key={team}
-                        team={team}
-                        isSelected={champion === team}
-                        onClick={() => onChange('Final', 0, team)}
-                        disabled={false}
-                      />
+                      <TeamButton key={team} team={team} isSelected={champion === team}
+                        onClick={() => onChange('Final', 0, team)} disabled={false} />
                     ))}
                   </div>
                 </div>
               ) : (
-                // Finalists not yet determined — dropdown fallback
                 <div className={`rounded-lg border transition-colors ${
-                  champion ? 'border-yellow-500 bg-yellow-900/30' : 'border-green-700 bg-green-900'
+                  champion ? 'border-wc-gold-600/50 bg-wc-gold-400/10' : 'border-wc-navy-700 bg-wc-navy-900'
                 }`}>
                   {champMeta && (
                     <div className="flex items-center gap-2 px-3 pt-2">
                       <img src={getFlagUrl(champMeta.flag)} alt={champion!} className="w-5 h-3.5 object-cover rounded-sm" />
                       <div>
-                        <div className="text-yellow-300 font-bold text-xs">{shortBracketName(champion!)}</div>
-                        <div className="text-green-400 text-[10px]">#{champMeta.fifaRank}</div>
+                        <div className="text-wc-gold-300 font-bold text-xs">{shortBracketName(champion!)}</div>
+                        <div className="text-wc-navy-400 text-[10px]">#{champMeta.fifaRank}</div>
                       </div>
                     </div>
                   )}
@@ -406,12 +320,12 @@ export default function KnockoutBracket({
                     value={champion ?? ''}
                     onChange={(e) => onChange('Final', 0, e.target.value)}
                     className={`w-full bg-transparent text-xs px-3 py-2 focus:outline-none cursor-pointer ${
-                      champion ? 'text-yellow-400' : 'text-green-400'
+                      champion ? 'text-wc-gold-300' : 'text-wc-navy-400'
                     }`}
                   >
-                    <option value="" className="bg-green-900 text-green-300">Pick champion…</option>
+                    <option value="" className="bg-wc-navy-900 text-wc-navy-300">Pick champion…</option>
                     {allTeams.map((team) => (
-                      <option key={team} value={team} className="bg-green-900 text-white">{team}</option>
+                      <option key={team} value={team} className="bg-wc-navy-900 text-white">{team}</option>
                     ))}
                   </select>
                 </div>
@@ -419,24 +333,17 @@ export default function KnockoutBracket({
             </div>
           </div>
 
-          {/* Right half */}
-          <HalfBracket
-            side="right"
-            effectivePicks={effectivePicks}
-            slotTeams={slotTeams}
-            onChange={onChange}
-            locked={locked}
-          />
+          <HalfBracket side="right" effectivePicks={effectivePicks} slotTeams={slotTeams} onChange={onChange} locked={locked} />
         </div>
 
         {/* Legend */}
-        <div className="mt-4 flex flex-wrap gap-4 justify-center text-xs text-green-500">
-          <span>R32 (+2 pts)</span>
-          <span>R16 (+3 pts)</span>
-          <span>QF (+5 pts)</span>
-          <span>SF (+8 pts)</span>
-          <span>Final winner (+13 pts)</span>
-          <span className="text-yellow-500 font-bold">Champion pick (+20 pts)</span>
+        <div className="mt-4 flex flex-wrap gap-4 justify-center text-xs text-wc-navy-500">
+          <span>R32 +2 pts</span>
+          <span>R16 +3 pts</span>
+          <span>QF +5 pts</span>
+          <span>SF +8 pts</span>
+          <span>Final +13 pts</span>
+          <span className="text-wc-gold-400 font-semibold">Champion +20 pts</span>
         </div>
       </div>
     </div>

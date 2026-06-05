@@ -51,34 +51,34 @@ export default function GroupMatchCard({
     <div
       className={`card relative ${
         isCorrect
-          ? 'border-green-500'
+          ? 'border-wc-green-500'
           : isWrong
-          ? 'border-red-600'
-          : 'border-wc-green-700'
+          ? 'border-wc-red-500'
+          : 'border-wc-navy-700'
       }`}
     >
       {/* Status badges */}
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-wc-green-400 font-mono">{matchId}</span>
+        <span className="text-xs text-wc-navy-400 font-mono">{matchId}</span>
         <div className="flex items-center gap-2">
           {status === 'live' && (
-            <span className="flex items-center gap-1 text-xs bg-red-600 text-white px-2 py-0.5 rounded-full">
+            <span className="flex items-center gap-1 text-xs bg-wc-red-500 text-white px-2 py-0.5 rounded-full">
               <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
               LIVE
             </span>
           )}
           {locked && (
-            <span className="text-xs bg-wc-green-800 text-wc-green-400 px-2 py-0.5 rounded-full">
+            <span className="text-xs bg-wc-navy-800 text-wc-navy-400 px-2 py-0.5 rounded-full">
               🔒 Locked
             </span>
           )}
           {isCorrect && (
-            <span className="text-xs bg-green-800 text-green-300 px-2 py-0.5 rounded-full">
+            <span className="text-xs bg-wc-green-800 text-wc-green-300 px-2 py-0.5 rounded-full">
               ✓ +1pt
             </span>
           )}
           {isWrong && (
-            <span className="text-xs bg-red-900 text-red-300 px-2 py-0.5 rounded-full">
+            <span className="text-xs bg-wc-red-700 text-wc-red-300 px-2 py-0.5 rounded-full">
               ✗ -1pt
             </span>
           )}
@@ -95,7 +95,7 @@ export default function GroupMatchCard({
             {homeGoals ?? 0} - {awayGoals ?? 0}
           </span>
         ) : (
-          <span className="text-wc-green-400 text-sm px-2">vs</span>
+          <span className="text-wc-navy-400 text-sm px-2">vs</span>
         )}
         <span className="font-semibold text-white text-sm flex-1 text-left pl-2">
           {away}
@@ -103,7 +103,7 @@ export default function GroupMatchCard({
       </div>
 
       {/* Date/Venue */}
-      <div className="text-xs text-wc-green-400 text-center mb-3">
+      <div className="text-xs text-wc-navy-400 text-center mb-3">
         {formatDate(date)} · {city}
       </div>
 
@@ -116,10 +116,10 @@ export default function GroupMatchCard({
             onClick={() => !locked && onPickChange(matchId, opt.value)}
             className={`py-1.5 px-1 rounded text-xs font-medium transition-colors duration-150 text-center ${
               currentPick === opt.value
-                ? 'bg-wc-gold-500 text-wc-green-950 font-bold'
+                ? 'bg-wc-blue-500 text-white font-bold'
                 : locked
-                ? 'bg-wc-green-800 text-wc-green-600 cursor-not-allowed'
-                : 'bg-wc-green-800 text-wc-green-200 hover:bg-wc-green-700 hover:text-white cursor-pointer'
+                ? 'bg-wc-navy-800 text-wc-navy-600 cursor-not-allowed'
+                : 'bg-wc-navy-700 text-wc-navy-200 hover:bg-wc-navy-600 hover:text-white cursor-pointer'
             }`}
           >
             {opt.value === 'home' ? home.split(' ')[0] : opt.value === 'away' ? away.split(' ')[0] : 'Draw'}
@@ -129,7 +129,7 @@ export default function GroupMatchCard({
 
       {/* Result label */}
       {result && (
-        <div className="mt-2 text-xs text-center text-wc-green-400">
+        <div className="mt-2 text-xs text-center text-wc-navy-400">
           Result: {result === 'home' ? home + ' win' : result === 'away' ? away + ' win' : 'Draw'}
         </div>
       )}

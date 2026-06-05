@@ -86,7 +86,7 @@ export default function Navbar({ username }: NavbarProps) {
                   href={link.href}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
                     active
-                      ? 'bg-wc-green-500/15 text-wc-green-400'
+                      ? 'bg-wc-blue-500/15 text-wc-blue-300'
                       : 'text-wc-navy-200 hover:text-white hover:bg-wc-navy-800'
                   }`}
                 >
@@ -138,7 +138,7 @@ export default function Navbar({ username }: NavbarProps) {
                   onClick={() => setMobileOpen(false)}
                   className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     active
-                      ? 'bg-wc-green-500/15 text-wc-green-400'
+                      ? 'bg-wc-blue-500/15 text-wc-blue-300'
                       : 'text-wc-navy-200 hover:text-white hover:bg-wc-navy-800'
                   }`}
                 >
