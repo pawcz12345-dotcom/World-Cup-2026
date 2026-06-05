@@ -1,6 +1,6 @@
 'use client';
 
-import { Group, GroupMatch, getGroupMatches, getTeamMeta, getFlagUrl, computeGroupStandings, groupHasTie } from '@/lib/worldcup-data';
+import { Group, getGroupMatches, getTeamMeta, getFlagUrl, computeGroupStandings, groupHasTie } from '@/lib/worldcup-data';
 
 interface GroupOverviewProps {
   groups: Group[];
@@ -22,41 +22,6 @@ function shortenName(name: string): string {
   return map[name] ?? (name.length > 11 ? name.slice(0, 10) + '…' : name);
 }
 
-interface Standing {
-  team: string;
-  p: number;
-  w: number;
-  d: number;
-  l: number;
-  pts: number;
-}
-
-function computeStandings(
-  teams: string[],
-  matches: GroupMatch[],
-  picks: Record<string, string>
-): Standing[] {
-  const table: Record<string, Standing> = {};
-  for (const t of teams) table[t] = { team: t, p: 0, w: 0, d: 0, l: 0, pts: 0 };
-  for (const m of matches) {
-    const pick = picks[m.matchId];
-    if (!pick) continue;
-    table[m.home].p++;
-    table[m.away].p++;
-    if (pick === 'home') {
-      table[m.home].w++; table[m.home].pts += 3; table[m.away].l++;
-    } else if (pick === 'away') {
-      table[m.away].w++; table[m.away].pts += 3; table[m.home].l++;
-    } else {
-      table[m.home].d++; table[m.home].pts++;
-      table[m.away].d++; table[m.away].pts++;
-    }
-  }
-  return teams
-    .map((t) => table[t])
-    .sort((a, b) => b.pts - a.pts || b.w - a.w || a.team.localeCompare(b.team));
-}
-
 interface GroupMiniCardProps {
   group: Group;
   matchPicks: Record<string, string>;
@@ -73,7 +38,7 @@ function GroupMiniCard({ group, matchPicks, tiebreakerOrder, onClick }: GroupMin
 
   const needsTiebreaker = complete && groupHasTie(computeGroupStandings(group.id, matchPicks)) && !tiebreakerOrder;
 
-  const standings = started ? computeStandings(group.teams, matches, matchPicks) : null;
+  const standings = started ? computeGroupStandings(group.id, matchPicks, tiebreakerOrder) : null;
 
   return (
     <div

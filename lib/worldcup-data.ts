@@ -1185,7 +1185,6 @@ export function computeGroupStandings(
     .sort((a, b) => {
       if (b.pts !== a.pts) return b.pts - a.pts;
       if (b.w !== a.w) return b.w - a.w;
-      // True tie — apply user-resolved tiebreaker order if available
       if (tiebreakerOrder) {
         const ai = tiebreakerOrder.indexOf(a.team);
         const bi = tiebreakerOrder.indexOf(b.team);
@@ -1195,8 +1194,6 @@ export function computeGroupStandings(
     });
 }
 
-// Returns true if any adjacent teams in the standings are genuinely tied
-// (same points AND same wins, meaning no deterministic sort without a tiebreaker)
 export function groupHasTie(standings: GroupStanding[]): boolean {
   for (let i = 0; i < standings.length - 1; i++) {
     if (standings[i].pts === standings[i + 1].pts && standings[i].w === standings[i + 1].w) {

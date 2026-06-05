@@ -110,7 +110,6 @@ export default function GroupDetailModal({
     };
   }, [handleKey]);
 
-  // Determine if any odds come from Polymarket
   const hasPolymarket = matches.some(
     (m) => oddsMap[m.matchId]?.source === 'polymarket'
   );
@@ -159,7 +158,6 @@ export default function GroupDetailModal({
                 )}
               </div>
 
-              {/* Tiebreaker banner */}
               {hasTie && (
                 <div className={`px-3 py-2 text-xs flex items-center gap-2 ${tieResolved ? 'bg-green-900/40 text-green-400' : 'bg-amber-900/40 text-amber-300'}`}>
                   <span>{tieResolved ? '✓ Tiebreaker set' : '⚠ Tiebreaker needed'}</span>

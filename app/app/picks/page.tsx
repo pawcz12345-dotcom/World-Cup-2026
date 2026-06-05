@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import GroupOverview from '@/components/picks/GroupOverview';
 import GroupDetailModal from '@/components/picks/GroupDetailModal';
 import KnockoutBracket from '@/components/picks/KnockoutBracket';
+import ThirdsQualificationPanel from '@/components/picks/ThirdsQualificationPanel';
 import { GROUPS, GROUP_MATCHES, ALL_TEAMS, computeGroupStandings, getGroupMatches, getTeamMeta } from '@/lib/worldcup-data';
 import type { MatchOdds } from '@/app/api/odds/route';
 
@@ -191,6 +192,40 @@ export default function PicksPage() {
     bracketTimers.current.set(timerKey, t);
   }
 
+  // Compute third-place standings for all groups (when all are complete).
+  // Returns null when not all groups are finished yet.
+  const thirdsInfo = useMemo(() => {
+    const thirdsOrder: string[] | undefined = tiebreakerPicks['thirds'];
+    const thirdsEntries: { team: string; pts: number; group: string }[] = [];
+
+    let allDone = true;
+    for (let gi = 0; gi < GROUPS.length; gi++) {
+      const g = GROUPS[gi];
+      const matches = getGroupMatches(g.id);
+      const pickedCount = matches.filter((m) => matchPicks[m.matchId]).length;
+      if (pickedCount < matches.length) { allDone = false; break; }
+      const rows = computeGroupStandings(g.id, matchPicks, tiebreakerPicks[g.id]);
+      if (rows[2]) thirdsEntries.push({ team: rows[2].team, pts: rows[2].pts, group: g.id });
+    }
+
+    if (!allDone) return null;
+
+    thirdsEntries.sort((a, b) => {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      if (thirdsOrder) {
+        const ai = thirdsOrder.indexOf(a.team);
+        const bi = thirdsOrder.indexOf(b.team);
+        if (ai !== -1 && bi !== -1) return ai - bi;
+      }
+      return a.team.localeCompare(b.team);
+    });
+
+    const hasTieAtCut = thirdsEntries.length >= 9 && thirdsEntries[7].pts === thirdsEntries[8].pts;
+    const isResolved = !hasTieAtCut || !!thirdsOrder;
+
+    return { thirds: thirdsEntries, hasTieAtCut, isResolved };
+  }, [matchPicks, tiebreakerPicks]);
+
   // Derive R32 matchups from completed group picks.
   // Only populates a slot when both contributing groups are fully picked.
   const r32Teams = useMemo((): Record<number, [string, string]> => {
@@ -246,26 +281,17 @@ export default function PicksPage() {
     }
 
     // Slots 6, 7, 14, 15: best 3rd-place teams (need all 12 groups complete)
-    const allGroupsDone = GROUPS.every((g) => standings[g.id]);
-    if (allGroupsDone) {
-      const thirds: { team: string; pts: number }[] = [];
-      for (let gi = 0; gi < GROUPS.length; gi++) {
-        const g = GROUPS[gi];
-        const rows = computeGroupStandings(g.id, matchPicks);
-        if (rows[2]) {
-          thirds.push({ team: rows[2].team, pts: rows[2].pts });
-        }
-      }
-      thirds.sort((a, b) => b.pts - a.pts);
-      // Assign pairs: slots 6&7 = best 3rd #1 vs #2, slots 14&15 = #3 vs #4
-      if (thirds[0] && thirds[1]) result[6] = [thirds[0].team, thirds[1].team];
-      if (thirds[2] && thirds[3]) result[7] = [thirds[2].team, thirds[3].team];
-      if (thirds[4] && thirds[5]) result[14] = [thirds[4].team, thirds[5].team];
-      if (thirds[6] && thirds[7]) result[15] = [thirds[6].team, thirds[7].team];
+    // Only populate when tiebreaker is resolved (or no tie exists)
+    if (thirdsInfo && thirdsInfo.isResolved) {
+      const t = thirdsInfo.thirds;
+      if (t[0] && t[1]) result[6]  = [t[0].team, t[1].team];
+      if (t[2] && t[3]) result[7]  = [t[2].team, t[3].team];
+      if (t[4] && t[5]) result[14] = [t[4].team, t[5].team];
+      if (t[6] && t[7]) result[15] = [t[6].team, t[7].team];
     }
 
     return result;
-  }, [matchPicks, tiebreakerPicks]);
+  }, [matchPicks, tiebreakerPicks, thirdsInfo]);
 
   if (loading) {
     return (
@@ -344,6 +370,18 @@ export default function PicksPage() {
           />
         )}
       </section>
+
+      {/* 3rd Place Tiebreaker — shown only when all groups done and a tie exists */}
+      {thirdsInfo && thirdsInfo.hasTieAtCut && (
+        <section>
+          <ThirdsQualificationPanel
+            thirds={thirdsInfo.thirds}
+            hasTieAtCut={thirdsInfo.hasTieAtCut}
+            tiebreakerOrder={tiebreakerPicks['thirds']}
+            onTiebreakerChange={(order) => handleTiebreakerChange('thirds', order)}
+          />
+        </section>
+      )}
 
       {/* Knockout Bracket */}
       <section>
