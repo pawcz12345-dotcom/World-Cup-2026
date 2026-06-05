@@ -6,102 +6,78 @@ const HEADERS = {
   Referer: 'https://polymarket.com/',
 };
 
-async function probe(label: string, url: string) {
+async function fetchJSON(label: string, url: string) {
   try {
     const res = await fetch(url, { headers: HEADERS, cache: 'no-store' });
-    const rawText = await res.text();
+    const text = await res.text();
     let parsed: unknown = null;
-    try { parsed = JSON.parse(rawText); } catch { /* ignore */ }
-    return { label, url, status: res.status, ok: res.ok, parsed };
+    try { parsed = JSON.parse(text); } catch { /* */ }
+    return { label, url, status: res.status, parsed };
   } catch (err) {
-    return { label, url, fetchError: String(err) };
+    return { label, url, status: 0, parsed: null, error: String(err) };
   }
-}
-
-// Try to find a Group F event by searching slug patterns
-async function searchSlugs(codes: string[][], date: string) {
-  const results = [];
-  for (const [a, b] of codes) {
-    const slug = `fifwc-${a}-${b}-${date}`;
-    const url = `https://gamma-api.polymarket.com/events?slug=${slug}`;
-    try {
-      const res = await fetch(url, { headers: HEADERS, cache: 'no-store' });
-      const text = await res.text();
-      let parsed: unknown = null;
-      try { parsed = JSON.parse(text); } catch { /* */ }
-      const found = Array.isArray(parsed) && parsed.length > 0;
-      results.push({ slug, status: res.status, found });
-    } catch (err) {
-      results.push({ slug, fetchError: String(err) });
-    }
-  }
-  return results;
 }
 
 export async function GET() {
-  // Group F matches:
-  // F2: Tunisia vs Japan   2026-06-15
-  // F3: Japan vs Sweden    2026-06-21
-  // F6: Sweden vs Tunisia  2026-06-26
-
-  // Code variants to try for Japan, Sweden, Tunisia
-  const japanCodes   = ['jpn', 'jp', 'japan'];
-  const swedenCodes  = ['swe', 'se', 'sweden'];
-  const tunisiaCodes = ['tun', 'tn', 'tunisia'];
-
-  // Build all slug combos for F2 (Tunisia vs Japan, 2026-06-15)
-  const f2Combos: string[][] = [];
-  for (const t of tunisiaCodes) for (const j of japanCodes) {
-    f2Combos.push([t, j]);
-    f2Combos.push([j, t]);
-  }
-
-  // Build all slug combos for F3 (Japan vs Sweden, 2026-06-21)
-  const f3Combos: string[][] = [];
-  for (const j of japanCodes) for (const s of swedenCodes) {
-    f3Combos.push([j, s]);
-    f3Combos.push([s, j]);
-  }
-
-  // Build all slug combos for F6 (Sweden vs Tunisia, 2026-06-26)
-  const f6Combos: string[][] = [];
-  for (const s of swedenCodes) for (const t of tunisiaCodes) {
-    f6Combos.push([s, t]);
-    f6Combos.push([t, s]);
-  }
-
-  // Also search for any fifwc event containing "japan", "swe", "tun"
-  const [f2Results, f3Results, f6Results, allFifwcEvents] = await Promise.all([
-    searchSlugs(f2Combos, '2026-06-15'),
-    searchSlugs(f3Combos, '2026-06-21'),
-    searchSlugs(f6Combos, '2026-06-26'),
-    probe('all-fifwc-active', 'https://gamma-api.polymarket.com/events?tag_slug=fifwc&active=true&limit=200'),
+  const [
+    fifwcTag,
+    fifwcTagInactive,
+    worldcupSearch,
+    fifwcSearch,
+    knownGood,
+    groupFParent,
+  ] = await Promise.all([
+    // All active fifwc-tagged events (dump all slugs)
+    fetchJSON('fifwc-tag-active', 'https://gamma-api.polymarket.com/events?tag_slug=fifwc&active=true&limit=200'),
+    // Including inactive/closed
+    fetchJSON('fifwc-tag-all', 'https://gamma-api.polymarket.com/events?tag_slug=fifwc&limit=200'),
+    // Try searching by "world cup" keyword
+    fetchJSON('search-worldcup', 'https://gamma-api.polymarket.com/events?q=world+cup+2026&limit=50'),
+    // Try searching "fifwc"
+    fetchJSON('search-fifwc', 'https://gamma-api.polymarket.com/events?q=fifwc&limit=50'),
+    // A known-good slug to verify the endpoint works
+    fetchJSON('known-good-che-can', 'https://gamma-api.polymarket.com/events?slug=fifwc-che-can-2026-06-24'),
+    // Maybe there's a parent group F event
+    fetchJSON('group-f-parent', 'https://gamma-api.polymarket.com/events?slug=fifwc-group-f-2026'),
   ]);
 
-  // Extract Group F-related slugs from the full event list
-  let groupFEvents: unknown[] = [];
-  if (
-    allFifwcEvents &&
-    'parsed' in allFifwcEvents &&
-    Array.isArray(allFifwcEvents.parsed)
-  ) {
-    groupFEvents = (allFifwcEvents.parsed as Array<{ slug?: string }>).filter((e) => {
-      const s = (e.slug ?? '').toLowerCase();
-      return (
-        s.includes('jpn') || s.includes('jp-') || s.includes('-jp') ||
-        s.includes('swe') || s.includes('se-') || s.includes('-se') ||
-        s.includes('tun') || s.includes('tn-') || s.includes('-tn') ||
-        s.includes('ned') || s.includes('japan') || s.includes('sweden') ||
-        s.includes('tunisia')
-      );
-    }).map((e: { slug?: string }) => e.slug);
+  // Extract just the slugs from each result to keep the response small
+  function extractSlugs(r: { parsed: unknown }): string[] {
+    if (!Array.isArray(r.parsed)) return [];
+    return (r.parsed as Array<{ slug?: string }>).map((e) => e.slug ?? '(no slug)');
   }
 
   return NextResponse.json({
-    f2_slugs_tried: f2Results,
-    f3_slugs_tried: f3Results,
-    f6_slugs_tried: f6Results,
-    group_f_related_events_found: groupFEvents,
-    all_fifwc_status: allFifwcEvents && 'status' in allFifwcEvents ? allFifwcEvents.status : 'error',
+    known_good: {
+      status: knownGood.status,
+      found: Array.isArray(knownGood.parsed) && knownGood.parsed.length > 0,
+      slug: Array.isArray(knownGood.parsed) && knownGood.parsed.length > 0
+        ? (knownGood.parsed as Array<{ slug?: string }>)[0]?.slug
+        : null,
+    },
+    fifwc_tag_active: {
+      status: fifwcTag.status,
+      count: Array.isArray(fifwcTag.parsed) ? fifwcTag.parsed.length : 0,
+      slugs: extractSlugs(fifwcTag),
+    },
+    fifwc_tag_all: {
+      status: fifwcTagInactive.status,
+      count: Array.isArray(fifwcTagInactive.parsed) ? fifwcTagInactive.parsed.length : 0,
+      slugs: extractSlugs(fifwcTagInactive),
+    },
+    worldcup_search: {
+      status: worldcupSearch.status,
+      count: Array.isArray(worldcupSearch.parsed) ? worldcupSearch.parsed.length : 0,
+      slugs: extractSlugs(worldcupSearch),
+    },
+    fifwc_search: {
+      status: fifwcSearch.status,
+      count: Array.isArray(fifwcSearch.parsed) ? fifwcSearch.parsed.length : 0,
+      slugs: extractSlugs(fifwcSearch),
+    },
+    group_f_parent: {
+      status: groupFParent.status,
+      found: Array.isArray(groupFParent.parsed) && groupFParent.parsed.length > 0,
+    },
   });
 }
