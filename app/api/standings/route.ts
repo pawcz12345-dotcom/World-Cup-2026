@@ -22,10 +22,8 @@ export async function GET() {
       prisma.user.findMany({
         include: { matchPicks: true, bracketPicks: true },
       }),
-      // matchId -> result ("home"|"draw"|"away"), only finished matches
       prisma.matchResult.findMany({ where: { status: 'finished', result: { not: null } } }),
-      // Bracket results would come from an admin source; placeholder empty for now
-      Promise.resolve([] as { round: string; slot: number; team: string }[]),
+      prisma.bracketResult.findMany(),
     ]);
 
     const resultMap = new Map(matchResults.map((r) => [r.matchId, r.result!]));
@@ -34,13 +32,12 @@ export async function GET() {
     const standings = users.map((u) => {
       let score = 0;
 
-      // Group stage: +1 correct, -1 wrong decisive, 0 if match drew and no draw pick
+      // Group stage: +1 correct, -1 any wrong pick
       for (const mp of u.matchPicks) {
         const actual = resultMap.get(mp.matchId);
         if (!actual) continue;
         if (mp.pick === actual) score += SCORING.groupCorrect;
-        else if (actual !== 'draw') score += SCORING.groupWrong;
-        // actual === 'draw' && pick !== 'draw' → +0 (no change)
+        else score += SCORING.groupWrong;
       }
 
       // Bracket: points by round
