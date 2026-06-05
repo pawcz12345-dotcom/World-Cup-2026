@@ -1,10 +1,11 @@
 'use client';
 
-import { Group, GroupMatch, getGroupMatches, getTeamMeta, getFlagUrl } from '@/lib/worldcup-data';
+import { Group, getGroupMatches, getTeamMeta, getFlagUrl, computeGroupStandings, groupHasTie } from '@/lib/worldcup-data';
 
 interface GroupOverviewProps {
   groups: Group[];
   matchPicks: Record<string, string>;
+  tiebreakerPicks?: Record<string, string[]>;
   onSelectGroup: (groupId: string) => void;
 }
 
@@ -21,55 +22,23 @@ function shortenName(name: string): string {
   return map[name] ?? (name.length > 11 ? name.slice(0, 10) + '…' : name);
 }
 
-interface Standing {
-  team: string;
-  p: number;
-  w: number;
-  d: number;
-  l: number;
-  pts: number;
-}
-
-function computeStandings(
-  teams: string[],
-  matches: GroupMatch[],
-  picks: Record<string, string>
-): Standing[] {
-  const table: Record<string, Standing> = {};
-  for (const t of teams) table[t] = { team: t, p: 0, w: 0, d: 0, l: 0, pts: 0 };
-  for (const m of matches) {
-    const pick = picks[m.matchId];
-    if (!pick) continue;
-    table[m.home].p++;
-    table[m.away].p++;
-    if (pick === 'home') {
-      table[m.home].w++; table[m.home].pts += 3; table[m.away].l++;
-    } else if (pick === 'away') {
-      table[m.away].w++; table[m.away].pts += 3; table[m.home].l++;
-    } else {
-      table[m.home].d++; table[m.home].pts++;
-      table[m.away].d++; table[m.away].pts++;
-    }
-  }
-  return teams
-    .map((t) => table[t])
-    .sort((a, b) => b.pts - a.pts || b.w - a.w || a.team.localeCompare(b.team));
-}
-
 interface GroupMiniCardProps {
   group: Group;
   matchPicks: Record<string, string>;
+  tiebreakerOrder?: string[];
   onClick: () => void;
 }
 
-function GroupMiniCard({ group, matchPicks, onClick }: GroupMiniCardProps) {
+function GroupMiniCard({ group, matchPicks, tiebreakerOrder, onClick }: GroupMiniCardProps) {
   const matches = getGroupMatches(group.id);
   const pickedCount = matches.filter((m) => matchPicks[m.matchId]).length;
   const total = matches.length;
   const complete = pickedCount === total;
   const started = pickedCount > 0;
 
-  const standings = started ? computeStandings(group.teams, matches, matchPicks) : null;
+  const needsTiebreaker = complete && groupHasTie(computeGroupStandings(group.id, matchPicks)) && !tiebreakerOrder;
+
+  const standings = started ? computeGroupStandings(group.id, matchPicks, tiebreakerOrder) : null;
 
   return (
     <div
@@ -85,7 +54,9 @@ function GroupMiniCard({ group, matchPicks, onClick }: GroupMiniCardProps) {
         <span className="text-yellow-400 font-bold text-xs tracking-widest uppercase">
           {group.name}
         </span>
-        {complete ? (
+        {needsTiebreaker ? (
+          <span className="text-amber-400 text-xs font-bold">⚠ Tie</span>
+        ) : complete ? (
           <span className="text-green-400 text-xs font-bold">&#10003;</span>
         ) : started ? (
           <span className="text-yellow-500 text-[10px] font-semibold">{pickedCount}/{total}</span>
@@ -193,7 +164,7 @@ function GroupMiniCard({ group, matchPicks, onClick }: GroupMiniCardProps) {
   );
 }
 
-export default function GroupOverview({ groups, matchPicks, onSelectGroup }: GroupOverviewProps) {
+export default function GroupOverview({ groups, matchPicks, tiebreakerPicks = {}, onSelectGroup }: GroupOverviewProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
       {groups.map((group) => (
@@ -201,6 +172,7 @@ export default function GroupOverview({ groups, matchPicks, onSelectGroup }: Gro
           key={group.id}
           group={group}
           matchPicks={matchPicks}
+          tiebreakerOrder={tiebreakerPicks[group.id]}
           onClick={() => onSelectGroup(group.id)}
         />
       ))}

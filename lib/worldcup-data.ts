@@ -851,11 +851,9 @@ export function getMatch(matchId: string): GroupMatch | undefined {
 }
 
 // Check if a match is locked (started - within 1 hour of match date)
-export function isMatchLocked(match: GroupMatch): boolean {
-  const matchDate = new Date(match.date + 'T00:00:00');
-  const now = new Date();
-  // Lock when the match date has arrived
-  return now >= matchDate;
+export function isMatchLocked(_match: GroupMatch, kickoffIso?: string | null): boolean {
+  if (!kickoffIso) return false;
+  return new Date() >= new Date(kickoffIso);
 }
 
 // Knockout bracket rounds

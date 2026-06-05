@@ -12,12 +12,13 @@ datasource db {
 }
 
 model User {
-  id           Int           @id @default(autoincrement())
-  username     String        @unique
-  password     String
-  createdAt    DateTime      @default(now())
-  matchPicks   MatchPick[]
-  bracketPicks BracketPick[]
+  id              Int               @id @default(autoincrement())
+  username        String            @unique
+  password        String
+  createdAt       DateTime          @default(now())
+  matchPicks      MatchPick[]
+  bracketPicks    BracketPick[]
+  tiebreakerPicks TiebreakerPick[]
 }
 
 model MatchPick {
@@ -39,6 +40,16 @@ model BracketPick {
   user   User   @relation(fields: [userId], references: [id])
 
   @@unique([userId, round, slot])
+}
+
+model TiebreakerPick {
+  id        Int    @id @default(autoincrement())
+  userId    Int
+  groupId   String // group letter e.g. "A", or "thirds" for cross-group 3rd-place ranking
+  teamOrder String // JSON array of team names in user's preferred order
+  user      User   @relation(fields: [userId], references: [id])
+
+  @@unique([userId, groupId])
 }
 
 model MatchResult {
