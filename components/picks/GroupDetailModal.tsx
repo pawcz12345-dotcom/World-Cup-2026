@@ -39,6 +39,11 @@ function formatDate(dateStr: string) {
   });
 }
 
+function formatKickoff(isoStr: string) {
+  const d = new Date(isoStr);
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+}
+
 function pct(p: number) {
   return `${Math.round(p * 100)}%`;
 }
@@ -249,7 +254,12 @@ export default function GroupDetailModal({
                 >
                   {/* Date + venue */}
                   <div className="flex justify-between items-center text-[11px] text-green-600 mb-3">
-                    <span>{formatDate(match.date)}</span>
+                    <div className="flex items-center gap-1.5">
+                      <span>{formatDate(match.date)}</span>
+                      {kickoffTimes[match.matchId] && (
+                        <span className="text-green-500">· {formatKickoff(kickoffTimes[match.matchId])}</span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <span className="truncate">{match.city}</span>
                       {isPolymarket && (
