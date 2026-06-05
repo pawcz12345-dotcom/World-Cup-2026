@@ -16,6 +16,7 @@ interface GroupDetailModalProps {
   onPickChange: (matchId: string, pick: string) => void;
   onClose: () => void;
   oddsMap?: Record<string, MatchOdds>;
+  kickoffTimes?: Record<string, string>;
 }
 
 function shortenName(name: string): string {
@@ -91,6 +92,7 @@ export default function GroupDetailModal({
   onPickChange,
   onClose,
   oddsMap = {},
+  kickoffTimes = {},
 }: GroupDetailModalProps) {
   const matches = getGroupMatches(group.id);
   const pickedCount = matches.filter((m) => matchPicks[m.matchId]).length;
@@ -224,7 +226,7 @@ export default function GroupDetailModal({
 
             {/* Match cards */}
             {matches.map((match) => {
-              const locked = isMatchLocked(match);
+              const locked = isMatchLocked(match, kickoffTimes[match.matchId]);
               const pick = matchPicks[match.matchId] ?? null;
 
               const oddsEntry = oddsMap[match.matchId];

@@ -77,6 +77,7 @@ interface PolyMarket {
 
 interface PolyEvent {
   slug: string;
+  startDate?: string; // ISO kick-off time e.g. "2026-06-24T18:00:00Z"
   markets: PolyMarket[];
 }
 
@@ -136,7 +137,7 @@ function parseEventOdds(
 
 async function fetchMatchOdds(
   match: (typeof GROUP_MATCHES)[0]
-): Promise<{ matchId: string; odds: MatchOdds } | null> {
+): Promise<{ matchId: string; odds: MatchOdds; kickoff: string | null } | null> {
   const homeCodes = TEAM_CODES[match.home] ?? [];
   const awayCodes = TEAM_CODES[match.away] ?? [];
   if (homeCodes.length === 0 || awayCodes.length === 0) return null;
@@ -166,24 +167,27 @@ async function fetchMatchOdds(
     if (!event) continue;
     const odds = parseEventOdds(event, hCode, aCode);
     if (odds) {
-      return { matchId: match.matchId, odds: { ...odds, source: 'polymarket' } };
+      return {
+        matchId: match.matchId,
+        odds: { ...odds, source: 'polymarket' },
+        kickoff: event.startDate ?? null,
+      };
     }
   }
   return null;
 }
 
-async function fetchAllOdds(): Promise<Record<string, MatchOdds>> {
-  const result: Record<string, MatchOdds> = {};
-  // Fetch all 48 matches in parallel; Next.js deduplicates identical URLs via fetch cache
+export async function GET() {
+  const odds: Record<string, MatchOdds> = {};
+  const kickoffTimes: Record<string, string> = {};
+
   const results = await Promise.all(GROUP_MATCHES.map(fetchMatchOdds));
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
-    if (r) result[r.matchId] = r.odds;
+    if (!r) continue;
+    odds[r.matchId] = r.odds;
+    if (r.kickoff) kickoffTimes[r.matchId] = r.kickoff;
   }
-  return result;
-}
 
-export async function GET() {
-  const odds = await fetchAllOdds();
-  return NextResponse.json({ odds });
+  return NextResponse.json({ odds, kickoffTimes });
 }

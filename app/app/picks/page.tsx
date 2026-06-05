@@ -13,6 +13,7 @@ export default function PicksPage() {
   const [matchPicks, setMatchPicks] = useState<Record<string, string>>({});
   const [bracketPicks, setBracketPicks] = useState<Record<string, string>>({});
   const [oddsMap, setOddsMap] = useState<Record<string, MatchOdds>>({});
+  const [kickoffTimes, setKickoffTimes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export default function PicksPage() {
 
       const oddsData = await oddsRes.json().catch(() => ({}));
       if (oddsData.odds) setOddsMap(oddsData.odds);
+      if (oddsData.kickoffTimes) setKickoffTimes(oddsData.kickoffTimes);
     } catch (err) {
       console.error('Error loading picks', err);
     } finally {
@@ -315,6 +317,7 @@ export default function PicksPage() {
             onPickChange={handleMatchPickChange}
             onClose={() => setSelectedGroup(null)}
             oddsMap={oddsMap}
+            kickoffTimes={kickoffTimes}
           />
         )}
       </section>
