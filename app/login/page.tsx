@@ -1,15 +1,21 @@
 'use client';
 
 import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // If redirected from an auth-required page, go there after login;
+  // otherwise go to dashboard. Guest always goes to dashboard.
+  const fromParam = searchParams.get('from');
+  const postLoginDest = fromParam && fromParam.startsWith('/app') ? fromParam : '/app/dashboard';
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -25,7 +31,7 @@ export default function LoginPage() {
       if (!res.ok) {
         setError(data.error || 'Login failed');
       } else {
-        router.push('/app/dashboard');
+        router.push(postLoginDest);
         router.refresh();
       }
     } catch {
@@ -92,6 +98,15 @@ export default function LoginPage() {
               Register
             </Link>
           </p>
+        </div>
+
+        <div className="mt-4 text-center">
+          <Link
+            href="/app/dashboard"
+            className="text-gray-400 hover:text-gray-600 text-sm font-semibold transition-colors"
+          >
+            Continue as guest →
+          </Link>
         </div>
       </div>
     </div>
