@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { GROUP_MATCHES } from '@/lib/worldcup-data';
 
 const HEADERS = {
   Accept: 'application/json',
@@ -6,36 +7,82 @@ const HEADERS = {
   Referer: 'https://polymarket.com/',
 };
 
-async function probe(slug: string) {
+const TEAM_CODES: Record<string, string> = {
+  'Mexico': 'mex', 'South Africa': 'rsa', 'South Korea': 'kr', 'Czechia': 'cze',
+  'Canada': 'can', 'Switzerland': 'che', 'Qatar': 'qat', 'Bosnia and Herzegovina': 'bih',
+  'Brazil': 'bra', 'Morocco': 'mar', 'Haiti': 'hai', 'Scotland': 'sco',
+  'United States': 'usa', 'Paraguay': 'par', 'Australia': 'aus', 'Turkey': 'tur',
+  'Germany': 'ger', 'Curacao': 'kor', "Cote d'Ivoire": 'civ', 'Ecuador': 'ecu',
+  'Netherlands': 'nld', 'Japan': 'jpn', 'Sweden': 'swe', 'Tunisia': 'tun',
+  'Belgium': 'bel', 'Egypt': 'egy', 'Iran': 'irn', 'New Zealand': 'nzl',
+  'Spain': 'esp', 'Cabo Verde': 'cvi', 'Saudi Arabia': 'ksa', 'Uruguay': 'ury',
+  'France': 'fra', 'Senegal': 'sen', 'Norway': 'nor', 'Iraq': 'irq',
+  'Argentina': 'arg', 'Algeria': 'alg', 'Austria': 'aut', 'Jordan': 'jor',
+  'Portugal': 'prt', 'DR Congo': 'cdr', 'Uzbekistan': 'uzb', 'Colombia': 'col',
+  'England': 'eng', 'Croatia': 'hrv', 'Ghana': 'gha', 'Panama': 'pan',
+};
+
+function shiftDate(dateStr: string, days: number): string {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function probeSlug(slug: string): Promise<boolean> {
   try {
-    const url = `https://gamma-api.polymarket.com/events?slug=${slug}`;
-    const res = await fetch(url, { headers: HEADERS, cache: 'no-store' });
+    const res = await fetch(`https://gamma-api.polymarket.com/events?slug=${slug}`, {
+      headers: HEADERS,
+      cache: 'no-store',
+    });
     const text = await res.text();
-    let parsed: unknown = null;
-    try { parsed = JSON.parse(text); } catch { /* */ }
-    const found = Array.isArray(parsed) && parsed.length > 0;
-    let markets: string[] = [];
-    if (found && Array.isArray(parsed)) {
-      const event = parsed[0] as { markets?: Array<{ slug?: string }> };
-      markets = (event.markets ?? []).map((m) => m.slug ?? '').filter(Boolean);
-    }
-    return { slug, found, markets };
-  } catch (err) {
-    return { slug, found: false, markets: [], error: String(err) };
+    const data = JSON.parse(text);
+    return Array.isArray(data) && data.length > 0;
+  } catch {
+    return false;
   }
 }
 
-export async function GET() {
-  // All 6 Group F slugs — confirmed via Polymarket embeds / debug probing
-  const slugs = [
-    'fifwc-nld-jpn-2026-06-14', // F1
-    'fifwc-swe-tun-2026-06-14', // F2
-    'fifwc-nld-swe-2026-06-20', // F3
-    'fifwc-tun-jpn-2026-06-21', // F4
-    'fifwc-tun-nld-2026-06-25', // F5
-    'fifwc-jpn-swe-2026-06-25', // F6
-  ];
+async function auditMatch(match: (typeof GROUP_MATCHES)[0]) {
+  const hCode = TEAM_CODES[match.home];
+  const aCode = TEAM_CODES[match.away];
+  if (!hCode || !aCode) {
+    return { matchId: match.matchId, error: `missing code: ${!hCode ? match.home : match.away}` };
+  }
 
-  const results = await Promise.all(slugs.map(probe));
-  return NextResponse.json(results);
+  // Try listed date ± 1 day, both orderings = 6 candidates
+  const candidates: { slug: string; date: string }[] = [];
+  for (const delta of [-1, 0, 1]) {
+    const d = shiftDate(match.date, delta);
+    candidates.push({ slug: `fifwc-${hCode}-${aCode}-${d}`, date: d });
+    candidates.push({ slug: `fifwc-${aCode}-${hCode}-${d}`, date: d });
+  }
+
+  const hits = await Promise.all(candidates.map(async (c) => ({ ...c, found: await probeSlug(c.slug) })));
+  const found = hits.find((h) => h.found);
+
+  if (!found) {
+    return { matchId: match.matchId, home: match.home, away: match.away, listedDate: match.date, status: 'NOT_FOUND' };
+  }
+
+  const dateOk = found.date === match.date;
+  return {
+    matchId: match.matchId,
+    home: match.home,
+    away: match.away,
+    listedDate: match.date,
+    foundSlug: found.slug,
+    foundDate: found.date,
+    status: dateOk ? 'OK' : 'DATE_MISMATCH',
+  };
+}
+
+export async function GET() {
+  const results = await Promise.all(GROUP_MATCHES.map(auditMatch));
+
+  const ok = results.filter((r) => 'status' in r && r.status === 'OK');
+  const dateMismatch = results.filter((r) => 'status' in r && r.status === 'DATE_MISMATCH');
+  const notFound = results.filter((r) => 'status' in r && r.status === 'NOT_FOUND');
+  const errors = results.filter((r) => 'error' in r);
+
+  return NextResponse.json({ ok, date_mismatch: dateMismatch, not_found: notFound, errors });
 }
