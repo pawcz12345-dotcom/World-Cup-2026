@@ -102,6 +102,8 @@ export default function AdminPanel({ matchResults, bracketResults, entryFee, pla
   const [feeSaved, setFeeSaved] = useState(false);
   const [feeError, setFeeError] = useState('');
   const [seeding, startSeeding] = useTransition();
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ synced: number; unmatched: string[] } | null>(null);
 
   // ── seed ──────────────────────────────────────────────────────────────────
 
@@ -110,6 +112,21 @@ export default function AdminPanel({ matchResults, bracketResults, entryFee, pla
       await fetch('/api/admin/seed', { method: 'POST' });
       window.location.reload();
     });
+  }
+
+  // ── ESPN sync ─────────────────────────────────────────────────────────────
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const res = await fetch('/api/admin/sync-results', { method: 'POST' });
+      const j = await res.json();
+      setSyncResult({ synced: j.synced ?? 0, unmatched: j.unmatched ?? [] });
+      if ((j.synced ?? 0) > 0) window.location.reload();
+    } finally {
+      setSyncing(false);
+    }
   }
 
   // ── match save ────────────────────────────────────────────────────────────
@@ -244,18 +261,59 @@ export default function AdminPanel({ matchResults, bracketResults, entryFee, pla
       {/* ── Tab: Match Results ── */}
       {tab === 'results' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">
-              Enter scores for completed group stage matches. Status auto-sets to <strong>Finished</strong> when both scores are saved.
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <p className="text-sm text-gray-500 flex-1">
+              Use <strong>Sync from ESPN</strong> to auto-fill finished results. Manual entry below as a fallback.
             </p>
-            <button
-              onClick={handleSeed}
-              disabled={seeding}
-              className="btn-secondary text-xs whitespace-nowrap"
-            >
-              {seeding ? 'Seeding…' : 'Seed 72 matches'}
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="btn-primary text-xs whitespace-nowrap flex items-center gap-1.5"
+              >
+                {syncing ? (
+                  <>
+                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    Syncing…
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Sync from ESPN
+                  </>
+                )}
+              </button>
+              <button
+                onClick={handleSeed}
+                disabled={seeding}
+                className="btn-secondary text-xs whitespace-nowrap"
+              >
+                {seeding ? 'Seeding…' : 'Seed 72 matches'}
+              </button>
+            </div>
           </div>
+
+          {syncResult && (
+            <div className={`rounded-xl px-4 py-3 text-sm ${
+              syncResult.synced > 0 ? 'bg-wc-green-50 border border-wc-green-200 text-wc-green-700'
+              : 'bg-gray-50 border border-gray-200 text-gray-600'
+            }`}>
+              {syncResult.synced > 0
+                ? `✓ Synced ${syncResult.synced} finished match${syncResult.synced !== 1 ? 'es' : ''} from ESPN.`
+                : 'No new finished matches found on ESPN.'}
+              {syncResult.unmatched.length > 0 && (
+                <span className="block text-xs text-gray-400 mt-1">
+                  Could not match: {syncResult.unmatched.join(', ')}
+                </span>
+              )}
+            </div>
+          )}
 
           {GROUPS.map((group) => {
             const groupMatches = GROUP_MATCHES.filter((m) => m.group === group.id);
