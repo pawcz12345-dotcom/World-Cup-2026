@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GROUP_MATCHES } from '@/lib/worldcup-data';
-import { POLYMARKET_TEAM_CODES as TEAM_CODES } from '@/lib/polymarket-codes';
+import { POLYMARKET_TEAM_CODES as TEAM_CODES, POLYMARKET_TEAM_ALT_CODES as ALT_CODES } from '@/lib/polymarket-codes';
 
 export const revalidate = 300; // re-fetch every 5 minutes
 
@@ -85,6 +85,11 @@ function parseEventOdds(
   return { home: homeProb / total, draw: drawProb / total, away: awayProb / total };
 }
 
+function uniqueCodes(primary: string, team: string): string[] {
+  const alts = ALT_CODES[team] ?? [];
+  return [primary, ...alts].filter((v, i, a) => a.indexOf(v) === i);
+}
+
 async function fetchMatchOdds(
   match: (typeof GROUP_MATCHES)[0]
 ): Promise<{ matchId: string; odds: MatchOdds; kickoff: string | null } | null> {
@@ -92,14 +97,19 @@ async function fetchMatchOdds(
   const aCode = TEAM_CODES[match.away];
   if (!hCode || !aCode) return null;
 
-  // Try home-away order, then reversed (Polymarket sometimes lists away team first)
-  const toTry = [
-    { slug: `fifwc-${hCode}-${aCode}-${match.date}`, hCode, aCode },
-    { slug: `fifwc-${aCode}-${hCode}-${match.date}`, hCode, aCode },
-  ];
+  const hCodes = uniqueCodes(hCode, match.home);
+  const aCodes = uniqueCodes(aCode, match.away);
 
-  for (let i = 0; i < toTry.length; i++) {
-    const { slug, hCode: h, aCode: a } = toTry[i];
+  // Try all combinations of home/away codes × both slug orderings
+  const toTry: { slug: string; hCode: string; aCode: string }[] = [];
+  for (const h of hCodes) {
+    for (const a of aCodes) {
+      toTry.push({ slug: `fifwc-${h}-${a}-${match.date}`, hCode: h, aCode: a });
+      toTry.push({ slug: `fifwc-${a}-${h}-${match.date}`, hCode: h, aCode: a });
+    }
+  }
+
+  for (const { slug, hCode: h, aCode: a } of toTry) {
     const event = await fetchEventBySlug(slug);
     if (!event) continue;
     const odds = parseEventOdds(event, h, a);
