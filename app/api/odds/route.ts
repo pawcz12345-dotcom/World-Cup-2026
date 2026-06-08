@@ -32,7 +32,7 @@ const TEAM_CODES: Record<string, string> = {
   'Curacao':                  'kor',  // Polymarket: "Curaçao" = kor (not a typo)
   "Cote d'Ivoire":            'civ',
   'Ecuador':                  'ecu',
-  'Netherlands':              'ned',  // FIFA/Polymarket code (not ISO 'nld')
+  'Netherlands':              'nld',  // Polymarket code confirmed from embed URL
   'Japan':                    'jpn',
   'Sweden':                   'swe',
   'Tunisia':                  'tun',

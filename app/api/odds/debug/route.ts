@@ -6,78 +6,58 @@ const HEADERS = {
   Referer: 'https://polymarket.com/',
 };
 
-async function fetchJSON(label: string, url: string) {
+async function probe(slug: string) {
   try {
+    const url = `https://gamma-api.polymarket.com/events?slug=${slug}`;
     const res = await fetch(url, { headers: HEADERS, cache: 'no-store' });
     const text = await res.text();
     let parsed: unknown = null;
     try { parsed = JSON.parse(text); } catch { /* */ }
-    return { label, url, status: res.status, parsed };
+    const found = Array.isArray(parsed) && parsed.length > 0;
+    // If found, extract market slugs to verify team codes
+    let markets: string[] = [];
+    if (found && Array.isArray(parsed)) {
+      const event = parsed[0] as { markets?: Array<{ slug?: string }> };
+      markets = (event.markets ?? []).map((m) => m.slug ?? '').filter(Boolean);
+    }
+    return { slug, status: res.status, found, markets };
   } catch (err) {
-    return { label, url, status: 0, parsed: null, error: String(err) };
+    return { slug, status: 0, found: false, markets: [], error: String(err) };
   }
 }
 
 export async function GET() {
-  const [
-    fifwcTag,
-    fifwcTagInactive,
-    worldcupSearch,
-    fifwcSearch,
-    knownGood,
-    groupFParent,
-  ] = await Promise.all([
-    // All active fifwc-tagged events (dump all slugs)
-    fetchJSON('fifwc-tag-active', 'https://gamma-api.polymarket.com/events?tag_slug=fifwc&active=true&limit=200'),
-    // Including inactive/closed
-    fetchJSON('fifwc-tag-all', 'https://gamma-api.polymarket.com/events?tag_slug=fifwc&limit=200'),
-    // Try searching by "world cup" keyword
-    fetchJSON('search-worldcup', 'https://gamma-api.polymarket.com/events?q=world+cup+2026&limit=50'),
-    // Try searching "fifwc"
-    fetchJSON('search-fifwc', 'https://gamma-api.polymarket.com/events?q=fifwc&limit=50'),
-    // A known-good slug to verify the endpoint works
-    fetchJSON('known-good-che-can', 'https://gamma-api.polymarket.com/events?slug=fifwc-che-can-2026-06-24'),
-    // Maybe there's a parent group F event
-    fetchJSON('group-f-parent', 'https://gamma-api.polymarket.com/events?slug=fifwc-group-f-2026'),
-  ]);
+  // Corrected Group F schedule:
+  // F1: NLD vs JPN  2026-06-14  (confirmed from embed)
+  // F2: SWE vs TUN  2026-06-15
+  // F3: NLD vs SWE  2026-06-21
+  // F4: JPN vs TUN  2026-06-21
+  // F5: NLD vs TUN  2026-06-26
+  // F6: JPN vs SWE  2026-06-26
 
-  // Extract just the slugs from each result to keep the response small
-  function extractSlugs(r: { parsed: unknown }): string[] {
-    if (!Array.isArray(r.parsed)) return [];
-    return (r.parsed as Array<{ slug?: string }>).map((e) => e.slug ?? '(no slug)');
-  }
+  const slugsToTry = [
+    // F1 confirmed
+    'fifwc-nld-jpn-2026-06-14',
+    // F2 both orders
+    'fifwc-swe-tun-2026-06-15',
+    'fifwc-tun-swe-2026-06-15',
+    // F3 both orders
+    'fifwc-nld-swe-2026-06-21',
+    'fifwc-swe-nld-2026-06-21',
+    // F4 both orders
+    'fifwc-jpn-tun-2026-06-21',
+    'fifwc-tun-jpn-2026-06-21',
+    // F5 both orders
+    'fifwc-nld-tun-2026-06-26',
+    'fifwc-tun-nld-2026-06-26',
+    // F6 both orders
+    'fifwc-jpn-swe-2026-06-26',
+    'fifwc-swe-jpn-2026-06-26',
+  ];
 
-  return NextResponse.json({
-    known_good: {
-      status: knownGood.status,
-      found: Array.isArray(knownGood.parsed) && knownGood.parsed.length > 0,
-      slug: Array.isArray(knownGood.parsed) && knownGood.parsed.length > 0
-        ? (knownGood.parsed as Array<{ slug?: string }>)[0]?.slug
-        : null,
-    },
-    fifwc_tag_active: {
-      status: fifwcTag.status,
-      count: Array.isArray(fifwcTag.parsed) ? fifwcTag.parsed.length : 0,
-      slugs: extractSlugs(fifwcTag),
-    },
-    fifwc_tag_all: {
-      status: fifwcTagInactive.status,
-      count: Array.isArray(fifwcTagInactive.parsed) ? fifwcTagInactive.parsed.length : 0,
-      slugs: extractSlugs(fifwcTagInactive),
-    },
-    worldcup_search: {
-      status: worldcupSearch.status,
-      count: Array.isArray(worldcupSearch.parsed) ? worldcupSearch.parsed.length : 0,
-      slugs: extractSlugs(worldcupSearch),
-    },
-    fifwc_search: {
-      status: fifwcSearch.status,
-      count: Array.isArray(fifwcSearch.parsed) ? fifwcSearch.parsed.length : 0,
-      slugs: extractSlugs(fifwcSearch),
-    },
-    group_f_parent: {
-      status: groupFParent.status,
-      found: Array.isArray(groupFParent.parsed) && groupFParent.parsed.length > 0,
-    },
-  });
+  const results = await Promise.all(slugsToTry.map(probe));
+  const found = results.filter((r) => r.found);
+  const notFound = results.filter((r) => !r.found).map((r) => r.slug);
+
+  return NextResponse.json({ found, not_found: notFound });
 }
