@@ -49,3 +49,10 @@ export const POLYMARKET_TEAM_CODES: Record<string, string> = {
   'Ghana':                    'gha',
   'Panama':                   'pan',
 };
+
+// Alternative codes to try for teams with ambiguous slugs (e.g. renaming, regional variations).
+// Turkey was officially renamed to Türkiye by FIFA in 2022; Polymarket may use tky or trk.
+export const POLYMARKET_TEAM_ALT_CODES: Record<string, string[]> = {
+  'Turkey':    ['tky', 'trk', 'tur'],
+  'Australia': ['aus', 'aud'],
+};

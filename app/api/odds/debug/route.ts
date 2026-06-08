@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { GROUP_MATCHES } from '@/lib/worldcup-data';
+import { POLYMARKET_TEAM_CODES as TEAM_CODES, POLYMARKET_TEAM_ALT_CODES as ALT_CODES } from '@/lib/polymarket-codes';
 
 const HEADERS = {
   Accept: 'application/json',
@@ -7,25 +8,15 @@ const HEADERS = {
   Referer: 'https://polymarket.com/',
 };
 
-const TEAM_CODES: Record<string, string> = {
-  'Mexico': 'mex', 'South Africa': 'rsa', 'South Korea': 'kr', 'Czechia': 'cze',
-  'Canada': 'can', 'Switzerland': 'che', 'Qatar': 'qat', 'Bosnia and Herzegovina': 'bih',
-  'Brazil': 'bra', 'Morocco': 'mar', 'Haiti': 'hai', 'Scotland': 'sco',
-  'United States': 'usa', 'Paraguay': 'par', 'Australia': 'aus', 'Turkey': 'tur',
-  'Germany': 'ger', 'Curacao': 'kor', "Cote d'Ivoire": 'civ', 'Ecuador': 'ecu',
-  'Netherlands': 'nld', 'Japan': 'jpn', 'Sweden': 'swe', 'Tunisia': 'tun',
-  'Belgium': 'bel', 'Egypt': 'egy', 'Iran': 'irn', 'New Zealand': 'nzl',
-  'Spain': 'esp', 'Cabo Verde': 'cvi', 'Saudi Arabia': 'ksa', 'Uruguay': 'ury',
-  'France': 'fra', 'Senegal': 'sen', 'Norway': 'nor', 'Iraq': 'irq',
-  'Argentina': 'arg', 'Algeria': 'alg', 'Austria': 'aut', 'Jordan': 'jor',
-  'Portugal': 'prt', 'DR Congo': 'cdr', 'Uzbekistan': 'uzb', 'Colombia': 'col',
-  'England': 'eng', 'Croatia': 'hrv', 'Ghana': 'gha', 'Panama': 'pan',
-};
-
 function shiftDate(dateStr: string, days: number): string {
   const d = new Date(dateStr + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+function allCodes(primary: string, team: string): string[] {
+  const alts = ALT_CODES[team] ?? [];
+  return [primary, ...alts].filter((v, i, a) => a.indexOf(v) === i);
 }
 
 async function probeSlug(slug: string): Promise<boolean> {
@@ -49,19 +40,26 @@ async function auditMatch(match: (typeof GROUP_MATCHES)[0]) {
     return { matchId: match.matchId, error: `missing code: ${!hCode ? match.home : match.away}` };
   }
 
-  // Try listed date ± 1 day, both orderings = 6 candidates
-  const candidates: { slug: string; date: string }[] = [];
-  for (const delta of [-1, 0, 1]) {
-    const d = shiftDate(match.date, delta);
-    candidates.push({ slug: `fifwc-${hCode}-${aCode}-${d}`, date: d });
-    candidates.push({ slug: `fifwc-${aCode}-${hCode}-${d}`, date: d });
+  const hCodes = allCodes(hCode, match.home);
+  const aCodes = allCodes(aCode, match.away);
+
+  // Try all code combinations × ±1 day × both orderings
+  const candidates: { slug: string; date: string; hCode: string; aCode: string }[] = [];
+  for (const h of hCodes) {
+    for (const a of aCodes) {
+      for (const delta of [-1, 0, 1]) {
+        const d = shiftDate(match.date, delta);
+        candidates.push({ slug: `fifwc-${h}-${a}-${d}`, date: d, hCode: h, aCode: a });
+        candidates.push({ slug: `fifwc-${a}-${h}-${d}`, date: d, hCode: h, aCode: a });
+      }
+    }
   }
 
   const hits = await Promise.all(candidates.map(async (c) => ({ ...c, found: await probeSlug(c.slug) })));
   const found = hits.find((h) => h.found);
 
   if (!found) {
-    return { matchId: match.matchId, home: match.home, away: match.away, listedDate: match.date, status: 'NOT_FOUND' };
+    return { matchId: match.matchId, home: match.home, away: match.away, listedDate: match.date, status: 'NOT_FOUND', triedCodes: { h: hCodes, a: aCodes } };
   }
 
   const dateOk = found.date === match.date;
