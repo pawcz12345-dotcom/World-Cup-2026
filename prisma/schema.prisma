@@ -24,6 +24,7 @@ model User {
   bracketPicks    BracketPick[]
   tiebreakerPicks TiebreakerPick[]
   poolWins        PoolWin[]
+  rankSnapshots   RankSnapshot[]
 }
 
 model MatchPick {
@@ -78,6 +79,17 @@ model BracketResult {
 model PoolConfig {
   id                Int   @id @default(1)
   entryFeePerPlayer Float @default(0)
+}
+
+model RankSnapshot {
+  id     Int    @id @default(autoincrement())
+  userId Int
+  user   User   @relation(fields: [userId], references: [id])
+  date   String // "YYYY-MM-DD" — kept current through the day, so a prior date holds end-of-day state
+  rank   Int
+  score  Int
+
+  @@unique([userId, date])
 }
 
 model PoolWin {

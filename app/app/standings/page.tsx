@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
-import { calculateTotalScore } from '@/lib/scoring';
+import { calculateTotalScore, calculateMaxPossibleScore } from '@/lib/scoring';
+import { updateRankSnapshots, getPreviousRanks } from '@/lib/rank-snapshots';
 import StandingsTable from '@/components/StandingsTable';
 import type { StandingsRow } from '@/components/StandingsTable';
 
@@ -30,7 +31,7 @@ const bracketScoringRows = [
 export default async function StandingsPage() {
   const currentUser = await getSessionUser();
 
-  const [matchResults, bracketResults, users] = await Promise.all([
+  const [matchResults, bracketResults, users, poolConfig] = await Promise.all([
     prisma.matchResult.findMany(),
     prisma.bracketResult.findMany(),
     prisma.user.findMany({
@@ -41,12 +42,15 @@ export default async function StandingsPage() {
       },
       orderBy: { createdAt: 'asc' },
     }),
+    prisma.poolConfig.findUnique({ where: { id: 1 } }),
   ]);
 
   const resultMap = new Map(
     matchResults.filter((r) => r.status === 'finished' && r.result).map((r) => [r.matchId, r.result!]),
   );
   const bracketMap = new Map(bracketResults.map((r) => [`${r.round}-${r.slot}`, r.team]));
+  const settledMatchIds = new Set(resultMap.keys());
+  const settledBracketSlots = new Set(bracketMap.keys());
 
   const envAdmins = envAdminUsernames();
   const scores: UserScore[] = users.map((user) => {
@@ -63,6 +67,9 @@ export default async function StandingsPage() {
         matchResults: resultMap,
         bracketResults: bracketMap,
       }),
+      maxScore: 0, // filled in below
+      movement: null,
+      prize: null,
       groupPicksCount: user.matchPicks.length,
       bracketPicksCount: user.bracketPicks.length,
       championPick,
@@ -72,7 +79,37 @@ export default async function StandingsPage() {
     };
   });
 
+  const userById = new Map(users.map((u) => [u.id, u]));
+  for (const row of scores) {
+    const u = userById.get(row.id)!;
+    row.maxScore = calculateMaxPossibleScore({
+      currentScore: row.score,
+      matchPicks: u.matchPicks,
+      bracketPicks: u.bracketPicks,
+      settledMatchIds,
+      settledBracketSlots,
+    });
+  }
+
   scores.sort((a, b) => b.score - a.score || a.username.localeCompare(b.username));
+
+  // Rank movement vs yesterday's final standings (ties share a rank)
+  const rankOf = (score: number) => scores.filter((s) => s.score > score).length + 1;
+  const ranked = scores.map((s) => ({ userId: s.id, rank: rankOf(s.score), score: s.score }));
+  const [previousRanks] = await Promise.all([getPreviousRanks(), updateRankSnapshots(ranked)]);
+  for (let i = 0; i < scores.length; i++) {
+    const prev = previousRanks.get(scores[i].id);
+    if (prev !== undefined) scores[i].movement = prev - ranked[i].rank;
+  }
+
+  // Live prize money
+  const entryFee = poolConfig?.entryFeePerPlayer ?? 0;
+  const totalPot = entryFee * scores.length;
+  if (totalPot > 0) {
+    if (scores[0]) scores[0].prize = Math.floor(totalPot * 0.75);
+    if (scores[1]) scores[1].prize = Math.floor(totalPot * 0.25);
+  }
+
   const finishedMatches = matchResults.filter((r) => r.status === 'finished').length;
 
   return (
@@ -86,6 +123,12 @@ export default async function StandingsPage() {
           {finishedMatches} match{finishedMatches !== 1 ? 'es' : ''} completed
           <span className="text-gray-300 mx-2">·</span>
           {scores.length} player{scores.length !== 1 ? 's' : ''} in the pool
+          {totalPot > 0 && (
+            <>
+              <span className="text-gray-300 mx-2">·</span>
+              <span className="text-wc-gold-600 font-bold">${totalPot.toLocaleString()} prize pool</span>
+            </>
+          )}
           <span className="text-gray-300 mx-2">·</span>
           scores update automatically
         </p>

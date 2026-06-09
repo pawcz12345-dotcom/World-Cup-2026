@@ -2,7 +2,8 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
-import { SCORING, BRACKET_ROUNDS, GROUP_MATCHES, getTeamMeta, getFlagUrl } from '@/lib/worldcup-data';
+import { SCORING, BRACKET_ROUNDS, GROUP_MATCHES, BRACKET_LOCK_ISO, getTeamMeta, getFlagUrl } from '@/lib/worldcup-data';
+import BracketView from '@/components/BracketView';
 
 export const dynamic = 'force-dynamic';
 
@@ -238,6 +239,21 @@ export default async function PlayerProfilePage({
       {lockedPicks.length === 0 && (
         <div className="card text-center py-10">
           <p className="text-gray-400 text-sm">No locked picks yet.</p>
+        </div>
+      )}
+
+      {/* Bracket — own bracket always visible, others' only after lock */}
+      {user.bracketPicks.length > 0 && (isOwnProfile || Date.now() >= new Date(BRACKET_LOCK_ISO).getTime()) && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-black text-gray-900 text-lg">Knockout Bracket</h2>
+            {isOwnProfile && Date.now() < new Date(BRACKET_LOCK_ISO).getTime() && (
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                Only you can see this until brackets lock
+              </span>
+            )}
+          </div>
+          <BracketView picks={user.bracketPicks} results={bracketResults} />
         </div>
       )}
     </div>

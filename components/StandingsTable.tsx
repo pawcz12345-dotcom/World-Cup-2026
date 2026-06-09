@@ -18,6 +18,9 @@ export interface StandingsRow {
   avatarUrl: string | null;
   isAdmin: boolean;
   score: number;
+  maxScore: number;
+  movement: number | null; // positions gained (+) or lost (−) vs yesterday
+  prize: number | null;    // current payout in dollars, if in the money
   groupPicksCount: number;
   bracketPicksCount: number;
   championPick: string | null;
@@ -38,6 +41,7 @@ export default function StandingsTable({ scores }: { scores: StandingsRow[] }) {
               <th className="text-left py-3.5 px-5 eyebrow text-left w-16">#</th>
               <th className="text-left py-3.5 px-4 eyebrow text-left">Player</th>
               <th className="text-right py-3.5 px-4 eyebrow">Points</th>
+              <th className="text-right py-3.5 px-4 eyebrow hidden sm:table-cell" title="Best possible final score">Max</th>
               <th className="text-right py-3.5 px-4 eyebrow hidden sm:table-cell">Groups</th>
               <th className="text-right py-3.5 px-5 eyebrow hidden md:table-cell">Bracket</th>
             </tr>
@@ -55,7 +59,17 @@ export default function StandingsTable({ scores }: { scores: StandingsRow[] }) {
                   }`}
                 >
                   <td className="py-4 px-5">
-                    <span className="font-black text-sm text-gray-400 tabular-nums">{index + 1}</span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <span className="font-black text-sm text-gray-400 tabular-nums">{index + 1}</span>
+                      {u.movement != null && u.movement !== 0 && (
+                        <span
+                          className={`text-[10px] font-black tabular-nums ${u.movement > 0 ? 'text-wc-green-600' : 'text-red-500'}`}
+                          title={`${u.movement > 0 ? 'Up' : 'Down'} ${Math.abs(u.movement)} since yesterday`}
+                        >
+                          {u.movement > 0 ? '▲' : '▼'}{Math.abs(u.movement)}
+                        </span>
+                      )}
+                    </span>
                   </td>
                   <td className="py-4 px-4">
                     <div className="flex items-center gap-2.5">
@@ -124,6 +138,14 @@ export default function StandingsTable({ scores }: { scores: StandingsRow[] }) {
                       {u.score}
                     </span>
                     <span className="text-gray-400 text-xs font-normal ml-1">pts</span>
+                    {u.prize != null && (
+                      <span className="block text-[11px] font-black text-wc-gold-600 mt-0.5">
+                        ${u.prize.toLocaleString()}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-4 px-4 text-right text-gray-400 hidden sm:table-cell tabular-nums text-xs font-medium" title="Best possible final score">
+                    {u.maxScore}
                   </td>
                   <td className="py-4 px-4 text-right text-gray-400 hidden sm:table-cell tabular-nums text-xs font-medium">
                     {u.groupPicksCount}/72
