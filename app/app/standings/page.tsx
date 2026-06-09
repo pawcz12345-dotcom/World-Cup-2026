@@ -12,15 +12,18 @@ export const dynamic = 'force-dynamic';
 
 type UserScore = StandingsRow;
 
-const scoringRows = [
+const groupScoringRows = [
   { label: 'Correct pick',   pts: '+1 pt',  positive: true  },
   { label: 'Result is draw', pts: '0 pts',  positive: true  },
   { label: 'Totally wrong',  pts: '−1 pt',  positive: false },
-  { label: 'Round of 32',    pts: '1 pt',   positive: true  },
-  { label: 'Round of 16',    pts: '2 pts',  positive: true  },
-  { label: 'Quarter-final',  pts: '4 pts',  positive: true  },
-  { label: 'Semi-final',     pts: '8 pts',  positive: true  },
-  { label: 'Final',          pts: '16 pts', positive: true  },
+] as const;
+
+const bracketScoringRows = [
+  { label: 'Round of 32',   pts: '1 pt',   positive: true },
+  { label: 'Round of 16',   pts: '2 pts',  positive: true },
+  { label: 'Quarter-final', pts: '4 pts',  positive: true },
+  { label: 'Semi-final',    pts: '8 pts',  positive: true },
+  { label: 'Final',         pts: '16 pts', positive: true },
 ] as const;
 
 export default async function StandingsPage() {
@@ -75,18 +78,32 @@ export default async function StandingsPage() {
       </div>
 
       {/* ─── Scoring Reference ─── */}
-      <div className="card">
-        <h3 className="eyebrow mb-4">Scoring System</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {scoringRows.map(({ label, pts, positive }) => (
-            <div key={label}
-              className={`flex items-center justify-between px-3 py-2.5 rounded-xl border ${
-                positive ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-100'
-              }`}>
-              <span className="text-gray-600 text-xs font-medium">{label}</span>
-              <span className={`font-black text-sm ml-2 ${positive ? 'text-wc-gold-500' : 'text-wc-red-500'}`}>{pts}</span>
-            </div>
-          ))}
+      <div className="card space-y-4">
+        <h3 className="eyebrow">Scoring System</h3>
+        <div>
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Group Stage</p>
+          <div className="grid grid-cols-3 gap-2">
+            {groupScoringRows.map(({ label, pts, positive }) => (
+              <div key={label}
+                className={`flex items-center justify-between px-3 py-2.5 rounded-xl border ${
+                  positive ? 'bg-gray-50 border-gray-200' : 'bg-red-50 border-red-100'
+                }`}>
+                <span className="text-gray-600 text-xs font-medium">{label}</span>
+                <span className={`font-black text-sm ml-2 ${positive ? 'text-wc-gold-500' : 'text-wc-red-500'}`}>{pts}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Bracket Stage</p>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {bracketScoringRows.map(({ label, pts }) => (
+              <div key={label} className="flex items-center justify-between px-3 py-2.5 rounded-xl border bg-gray-50 border-gray-200">
+                <span className="text-gray-600 text-xs font-medium">{label}</span>
+                <span className="font-black text-sm ml-2 text-wc-gold-500">{pts}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

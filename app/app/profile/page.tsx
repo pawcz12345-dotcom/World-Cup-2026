@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { ALL_TEAMS } from '@/lib/worldcup-data';
 import type { MeStats } from '@/app/api/me/stats/route';
 import type { PoolWinEntry } from '@/app/api/players/[username]/trophies/route';
@@ -211,6 +212,11 @@ export default function ProfilePage() {
               <span key={i} title={`${t.poolName} ${t.year}`} className="text-3xl leading-none">🏆</span>
             )
           ))}
+          {profile && (
+            <Link href={`/app/players/${profile.username}`} className="text-xs font-semibold text-wc-blue-500 hover:underline ml-1">
+              View public profile →
+            </Link>
+          )}
         </div>
       </div>
 
