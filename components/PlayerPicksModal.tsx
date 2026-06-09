@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import type { PlayerPickEntry, BracketPickEntry } from '@/app/api/players/[username]/picks/route';
 import { BRACKET_ROUNDS } from '@/lib/worldcup-data';
 
@@ -124,6 +125,12 @@ export default function PlayerPicksModal({ username, displayName, avatarUrl: ava
               )}
             </div>
             </div>
+            <Link
+              href={`/app/players/${encodeURIComponent(username)}`}
+              className="text-xs font-semibold text-wc-blue-500 hover:underline whitespace-nowrap mr-2"
+            >
+              Full profile →
+            </Link>
             <button onClick={onClose}
               className="text-gray-400 hover:text-gray-700 transition-colors p-1.5 rounded-lg hover:bg-gray-100"
               aria-label="Close">
