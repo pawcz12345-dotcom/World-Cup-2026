@@ -68,3 +68,25 @@ export const ROUND_POINTS: Record<string, number> = {
   SF:    SCORING.sf,
   Final: SCORING.final,
 };
+
+// Upper bound on a player's final score: current score plus every pick that
+// could still come good (unfinished group matches, bracket slots without a
+// recorded result).
+export function calculateMaxPossibleScore(params: {
+  currentScore: number;
+  matchPicks: Array<{ matchId: string }>;
+  bracketPicks: Array<{ round: string; slot: number }>;
+  settledMatchIds: Set<string>;
+  settledBracketSlots: Set<string>;
+}): number {
+  let max = params.currentScore;
+  for (const mp of params.matchPicks) {
+    if (!params.settledMatchIds.has(mp.matchId)) max += SCORING.groupCorrect;
+  }
+  for (const bp of params.bracketPicks) {
+    if (!params.settledBracketSlots.has(`${bp.round}-${bp.slot}`)) {
+      max += ROUND_POINTS[bp.round] ?? 0;
+    }
+  }
+  return max;
+}
