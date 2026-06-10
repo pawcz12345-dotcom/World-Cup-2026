@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/prisma';
 import { getSessionUser } from '@/lib/auth';
-import { GROUP_MATCHES } from '@/lib/worldcup-data';
 import type { Metadata } from 'next';
 import StandingsLastUpdated from '@/components/StandingsLastUpdated';
 
@@ -64,13 +63,6 @@ export default async function StandingsPage() {
 
   scores.sort((a, b) => b.score - a.score || a.username.localeCompare(b.username));
   const finishedMatches = matchResults.filter((r) => r.status === 'finished').length;
-  const remainingGroupMatches = GROUP_MATCHES.length - finishedMatches;
-
-  // "What you need to win" for the current user
-  const myEntry = currentUser ? scores.find((s) => s.username === currentUser.username) : null;
-  const myRank = myEntry ? scores.indexOf(myEntry) + 1 : null;
-  const leader = scores[0] ?? null;
-  const pointsBehind = myEntry && leader ? leader.score - myEntry.score : null;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -88,38 +80,6 @@ export default async function StandingsPage() {
         </div>
         <StandingsLastUpdated />
       </div>
-
-      {/* ─── "What you need to win" for current user ─── */}
-      {myEntry && myRank !== null && pointsBehind !== null && myRank > 1 && remainingGroupMatches > 0 && (
-        <div className="card bg-wc-blue-500/5 border border-wc-blue-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-wc-blue-600 uppercase tracking-wider mb-1">Your path to 1st</p>
-              <p className="text-gray-800 text-sm font-semibold">
-                You&apos;re in <span className="text-wc-blue-600 font-black">#{myRank}</span> with <span className="font-black">{myEntry.score} pts</span>.{' '}
-                Need <span className="font-black text-wc-blue-600">+{pointsBehind + 1}</span> to take the lead.
-              </p>
-              <p className="text-gray-500 text-xs mt-1">
-                {remainingGroupMatches} group match{remainingGroupMatches !== 1 ? 'es' : ''} remaining · each correct pick = +1 pt
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {myEntry && myRank === 1 && scores.length > 1 && (
-        <div className="card bg-wc-gold-400/10 border border-wc-gold-300">
-          <p className="text-xs font-bold text-wc-gold-600 uppercase tracking-wider mb-1">You&apos;re leading</p>
-          <p className="text-gray-800 text-sm font-semibold">
-            You&apos;re in 1st with <span className="font-black">{myEntry.score} pts</span>.{' '}
-            {scores[1] && myEntry.score - scores[1].score > 0 && (
-              <span className="text-gray-500">
-                {myEntry.score - scores[1].score} pt lead over {scores[1].displayName ?? scores[1].username}.
-              </span>
-            )}
-          </p>
-        </div>
-      )}
 
       {/* ─── Scoring Reference ─── */}
       <div className="card">
