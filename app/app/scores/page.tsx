@@ -77,7 +77,16 @@ export default function ScoresPage() {
   const [activeEntry, setActiveEntry] = useState(1);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const fetchOdds = useCallback(async () => {
+    try {
+      const res = await fetch('/api/odds');
+      const data = await res.json();
+      if (data?.odds) setOddsMap(data.odds);
+    } catch { /* keep last known odds */ }
+  }, []);
+
   const fetchScores = useCallback(async () => {
+    fetchOdds();
     try {
       const res = await fetch('/api/scores');
       const data = await res.json();
@@ -94,9 +103,9 @@ export default function ScoresPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchOdds]);
 
-  // Fetch entries, distribution, and odds once on mount
+  // Fetch entries and distribution once on mount (odds poll with scores)
   useEffect(() => {
     fetch('/api/me/entries')
       .then((r) => (r.ok ? r.json() : null))
@@ -106,11 +115,6 @@ export default function ScoresPage() {
     fetch('/api/picks/distribution')
       .then((r) => r.json())
       .then((d) => setDistribution(d))
-      .catch(() => {});
-
-    fetch('/api/odds')
-      .then((r) => r.json())
-      .then((d) => { if (d?.odds) setOddsMap(d.odds); })
       .catch(() => {});
   }, []);
 
