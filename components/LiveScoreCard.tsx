@@ -134,23 +134,35 @@ export default function LiveScoreCard({ match, odds, currentPick, distribution, 
         </div>
       </div>
 
-      {/* Odds — shown for scheduled matches as read-only bars */}
-      {isScheduled && odds && (
-        <div className="grid grid-cols-3 gap-1.5 mb-3">
-          {options.map(({ value, label, prob }) => (
-            <div key={value} className="text-center">
-              <div className="text-[11px] font-bold tabular-nums text-gray-700">
-                {prob !== null ? pct(prob) : '—'}
-              </div>
-              <div className="w-full h-1 rounded-full bg-gray-100 mt-0.5 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-wc-blue-300"
-                  style={{ width: prob !== null ? `${Math.round(prob * 100)}%` : '0%' }}
-                />
-              </div>
-              <div className="text-[11px] text-gray-400 mt-0.5 truncate">{label}</div>
+      {/* Odds — live market prices in-game, pre-match line otherwise */}
+      {odds && (
+        <div className="mb-3">
+          {odds.phase === 'live' ? (
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-wc-red-500 font-bold mb-1">
+              <span className="w-1.5 h-1.5 bg-wc-red-500 rounded-full animate-pulse" />
+              Live odds
             </div>
-          ))}
+          ) : !isScheduled ? (
+            <div className="text-center text-[11px] text-gray-400 font-semibold mb-1">
+              Pre-match odds
+            </div>
+          ) : null}
+          <div className="grid grid-cols-3 gap-1.5">
+            {options.map(({ value, label, prob }) => (
+              <div key={value} className="text-center">
+                <div className="text-[11px] font-bold tabular-nums text-gray-700">
+                  {prob !== null ? pct(prob) : '—'}
+                </div>
+                <div className="w-full h-1 rounded-full bg-gray-100 mt-0.5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-wc-blue-300 transition-[width] duration-700"
+                    style={{ width: prob !== null ? `${Math.round(prob * 100)}%` : '0%' }}
+                  />
+                </div>
+                <div className="text-[11px] text-gray-400 mt-0.5 truncate">{label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

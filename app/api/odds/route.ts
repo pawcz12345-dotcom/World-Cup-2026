@@ -1,16 +1,23 @@
 import { NextResponse } from 'next/server';
 import { GROUP_MATCHES } from '@/lib/worldcup-data';
 import { POLYMARKET_TEAM_CODES as TEAM_CODES, POLYMARKET_TEAM_ALT_CODES as ALT_CODES } from '@/lib/polymarket-codes';
+import { prisma } from '@/lib/prisma';
 
-export const revalidate = 300; // re-fetch every 5 minutes
+export const dynamic = 'force-dynamic';
 
 export interface MatchOdds {
   home: number;   // probability 0–1
   draw: number;
   away: number;
   source: 'polymarket';
+  // 'live' = in-game prices still trading; 'prematch' = last odds before kickoff
+  phase: 'prematch' | 'live';
 }
 
+interface OddsResponse {
+  odds: Record<string, MatchOdds>;
+  kickoffTimes: Record<string, string>;
+}
 
 const FETCH_HEADERS = {
   Accept: 'application/json',
@@ -31,10 +38,13 @@ interface PolyEvent {
   markets: PolyMarket[];
 }
 
-async function fetchEventBySlug(slug: string): Promise<PolyEvent | null> {
+async function fetchEventBySlug(slug: string, fresh = false): Promise<PolyEvent | null> {
   try {
     const url = `https://gamma-api.polymarket.com/events?slug=${slug}`;
-    const res = await fetch(url, { headers: FETCH_HEADERS, next: { revalidate: 300 } });
+    const res = await fetch(url, {
+      headers: FETCH_HEADERS,
+      ...(fresh ? { cache: 'no-store' as const } : { next: { revalidate: 300 } }),
+    });
     if (!res.ok) return null;
     const data: PolyEvent[] = await res.json().catch(() => []);
     if (!Array.isArray(data) || data.length === 0) return null;
@@ -85,6 +95,10 @@ function parseEventOdds(
   return { home: homeProb / total, draw: drawProb / total, away: awayProb / total };
 }
 
+function isEventResolved(event: PolyEvent): boolean {
+  return event.markets.every((m) => m.closed);
+}
+
 function uniqueCodes(primary: string, team: string): string[] {
   const alts = ALT_CODES[team] ?? [];
   return [primary, ...alts].filter((v, i, a) => a.indexOf(v) === i);
@@ -96,9 +110,36 @@ function shiftDate(dateStr: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+interface MatchOddsResult {
+  matchId: string;
+  odds: MatchOdds;
+  kickoff: string | null;
+  // true while the match hasn't kicked off — these odds become the pre-match snapshot
+  prematch: boolean;
+}
+
+type Snapshot = { home: number; draw: number; away: number };
+
+function snapshotOdds(matchId: string, snap: Snapshot): MatchOddsResult {
+  return {
+    matchId,
+    odds: { ...snap, source: 'polymarket', phase: 'prematch' },
+    kickoff: null,
+    prematch: false,
+  };
+}
+
 async function fetchMatchOdds(
-  match: (typeof GROUP_MATCHES)[0]
-): Promise<{ matchId: string; odds: MatchOdds; kickoff: string | null } | null> {
+  match: (typeof GROUP_MATCHES)[0],
+  finished: boolean,
+  snapshot: Snapshot | undefined,
+  now: number
+): Promise<MatchOddsResult | null> {
+  // Finished matches show the stored pre-match odds — no Polymarket fetch needed
+  if (finished) {
+    return snapshot ? snapshotOdds(match.matchId, snapshot) : null;
+  }
+
   const hCode = TEAM_CODES[match.home];
   const aCode = TEAM_CODES[match.away];
   if (!hCode || !aCode) return null;
@@ -123,28 +164,108 @@ async function fetchMatchOdds(
     const event = await fetchEventBySlug(slug);
     if (!event) continue;
     const odds = parseEventOdds(event, h, a);
-    if (odds) {
+    if (!odds) continue;
+
+    const kickoff = event.startTime ?? match.kickoffIso;
+    const started = now >= new Date(kickoff).getTime();
+
+    if (!started) {
       return {
         matchId: match.matchId,
-        odds: { ...odds, source: 'polymarket' },
+        odds: { ...odds, source: 'polymarket', phase: 'prematch' },
         kickoff: event.startTime ?? null,
+        prematch: true,
       };
     }
+
+    // In-game: bypass the cache so prices track the live market
+    const liveEvent = await fetchEventBySlug(slug, true);
+    if (liveEvent) {
+      // Market resolved (game decided) — fall back to the pre-match snapshot
+      if (isEventResolved(liveEvent)) {
+        return snapshot ? snapshotOdds(match.matchId, snapshot) : null;
+      }
+      const liveOdds = parseEventOdds(liveEvent, h, a);
+      if (liveOdds) {
+        return {
+          matchId: match.matchId,
+          odds: { ...liveOdds, source: 'polymarket', phase: 'live' },
+          kickoff: liveEvent.startTime ?? event.startTime ?? null,
+          prematch: false,
+        };
+      }
+    }
+
+    // Fresh fetch failed — serve the cached prices rather than nothing
+    return {
+      matchId: match.matchId,
+      odds: { ...odds, source: 'polymarket', phase: 'live' },
+      kickoff: event.startTime ?? null,
+      prematch: false,
+    };
   }
   return null;
 }
 
+// In-memory response cache: short TTL while games are live, longer otherwise
+let oddsCache: { data: OddsResponse; at: number; hasLive: boolean } | null = null;
+let lastSnapshotAt = 0;
+
 export async function GET() {
+  const now = Date.now();
+
+  if (oddsCache && now - oddsCache.at < (oddsCache.hasLive ? 30_000 : 300_000)) {
+    return NextResponse.json(oddsCache.data);
+  }
+
+  const [dbResults, dbSnapshots] = await Promise.all([
+    prisma.matchResult.findMany(),
+    prisma.oddsSnapshot.findMany(),
+  ]);
+  const finishedIds = new Set(
+    dbResults.filter((r) => r.status === 'finished').map((r) => r.matchId)
+  );
+  const snapshotMap = new Map<string, Snapshot>(
+    dbSnapshots.map((s) => [s.matchId, { home: s.home, draw: s.draw, away: s.away }])
+  );
+
   const odds: Record<string, MatchOdds> = {};
   const kickoffTimes: Record<string, string> = {};
 
-  const results = await Promise.all(GROUP_MATCHES.map(fetchMatchOdds));
+  const results = await Promise.all(
+    GROUP_MATCHES.map((m) =>
+      fetchMatchOdds(m, finishedIds.has(m.matchId), snapshotMap.get(m.matchId), now)
+    )
+  );
+
+  const toSnapshot: { matchId: string; home: number; draw: number; away: number }[] = [];
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     if (!r) continue;
     odds[r.matchId] = r.odds;
     if (r.kickoff) kickoffTimes[r.matchId] = r.kickoff;
+    if (r.prematch) {
+      toSnapshot.push({ matchId: r.matchId, home: r.odds.home, draw: r.odds.draw, away: r.odds.away });
+    }
   }
 
-  return NextResponse.json({ odds, kickoffTimes });
+  // Persist pre-kickoff odds (throttled) — the last write before kickoff
+  // becomes the pre-match line shown once the game is over
+  if (toSnapshot.length > 0 && now - lastSnapshotAt > 300_000) {
+    lastSnapshotAt = now;
+    await Promise.all(
+      toSnapshot.map((s) =>
+        prisma.oddsSnapshot.upsert({
+          where: { matchId: s.matchId },
+          update: { home: s.home, draw: s.draw, away: s.away },
+          create: s,
+        }).catch(() => null)
+      )
+    );
+  }
+
+  const hasLive = Object.values(odds).some((o) => o.phase === 'live');
+  const responseData: OddsResponse = { odds, kickoffTimes };
+  oddsCache = { data: responseData, at: now, hasLive };
+  return NextResponse.json(responseData);
 }

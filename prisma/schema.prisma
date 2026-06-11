@@ -107,3 +107,12 @@ model PoolWin {
   trophyImage String?  // path like "/images/world-cup-trophy.png"
   awardedAt   DateTime @default(now())
 }
+
+model OddsSnapshot {
+  id        Int      @id @default(autoincrement())
+  matchId   String   @unique
+  home      Float
+  draw      Float
+  away      Float
+  updatedAt DateTime @updatedAt
+}
