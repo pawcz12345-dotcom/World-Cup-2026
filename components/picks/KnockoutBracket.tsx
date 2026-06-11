@@ -226,7 +226,7 @@ export default function KnockoutBracket({ picks, onChange, locked, allTeams, r32
 
   return (
     <div className="overflow-x-auto">
-      <div className="min-w-[920px] px-2 pb-4">
+      <div className="min-w-[1160px] px-2 pb-4">
         <div className="flex items-start gap-2 justify-center">
 
           <HalfBracket side="left" effectivePicks={effectivePicks} slotTeams={slotTeams} onChange={onChange} locked={locked} />
