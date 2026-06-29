@@ -138,24 +138,23 @@ export default function BracketBoard({
                 const decided = !!winner;
                 const isFinal = round === 'Final';
 
-                // Live data / odds apply only when the real fixture features the
-                // same two teams the player advanced into this slot.
+                // The real game at this bracket position (if the admin has set
+                // it). Live score / odds attach to whichever listed team is
+                // actually playing in it.
                 const live = liveByKey[key];
                 const odds = oddsByKey[key];
-                const realMatch =
-                  live && a && b &&
-                  ((live.home === a && live.away === b) || (live.home === b && live.away === a));
+                const inMatch = (team: string | null): boolean =>
+                  !!team && !!live && (live.home === team || live.away === team);
 
                 const scoreFor = (team: string | null): string | null => {
-                  if (!realMatch || !team || live!.homeScore === null || live!.awayScore === null) return null;
+                  if (!inMatch(team) || live!.homeScore === null || live!.awayScore === null) return null;
                   if (live!.status === 'scheduled') return null;
-                  const isHome = live!.home === team;
-                  return String(isHome ? live!.homeScore : live!.awayScore);
+                  return String(live!.home === team ? live!.homeScore : live!.awayScore);
                 };
                 // Knockout games can't draw — split the draw probability evenly
                 // so the two teams' win odds sum to 100%.
                 const probFor = (team: string | null): number | null => {
-                  if (!realMatch || !odds || !team) return null;
+                  if (!inMatch(team) || !odds) return null;
                   const base = live!.home === team ? odds.home : odds.away;
                   return base + odds.draw / 2;
                 };
@@ -165,9 +164,9 @@ export default function BracketBoard({
                 const deadFor = (t: string | null): boolean =>
                   !!t && t !== winner && (decided || elimSet.has(t));
                 const liveBadge =
-                  realMatch && live!.status === 'live'
-                    ? live!.clock || 'LIVE'
-                    : realMatch && live!.status === 'finished'
+                  live && live.status === 'live'
+                    ? live.clock || 'LIVE'
+                    : live && live.status === 'finished'
                     ? 'FT'
                     : null;
 
@@ -186,9 +185,10 @@ export default function BracketBoard({
                         </span>
                       )}
                     </div>
-                    {isFinal && dist && dist.total > 0 ? (
-                      // Champion is a free pick, so list EVERY team the pool
-                      // picked to win it all, ranked by share.
+                    {dist && dist.total > 0 ? (
+                      // List EVERY team the pool picked for this slot, ranked by
+                      // share, with live score / odds on whoever's actually
+                      // playing the real game here.
                       Object.entries(dist.teams)
                         .sort((x, y) => y[1] - x[1])
                         .map(([team, count]) => (
@@ -198,11 +198,11 @@ export default function BracketBoard({
                             picked={picked === team}
                             winner={winner === team}
                             dead={deadFor(team)}
-                            scoreText={null}
-                            winProb={null}
+                            scoreText={scoreFor(team)}
+                            winProb={probFor(team)}
                             distCount={count}
                             distTotal={dist.total}
-                            isFinal
+                            isFinal={isFinal}
                           />
                         ))
                     ) : (
