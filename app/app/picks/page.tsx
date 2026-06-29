@@ -9,6 +9,7 @@ import type { GroupStanding, ThirdPlaceEntry } from '@/lib/worldcup-data';
 import type { KnockoutMatchData } from '@/app/api/knockout/route';
 import type { MatchOdds } from '@/app/api/odds/route';
 import type { PickDistribution } from '@/app/api/picks/distribution/route';
+import type { SlotDistribution } from '@/app/api/brackets/route';
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -43,6 +44,7 @@ export default function PicksPage() {
   const [bracketPicks, setBracketPicks] = useState<Record<string, string>>({});
   const [knockoutMatches, setKnockoutMatches] = useState<KnockoutMatchData[]>([]);
   const [bracketResults, setBracketResults] = useState<Record<string, string>>({});
+  const [bracketDistribution, setBracketDistribution] = useState<Record<string, SlotDistribution>>({});
   const [oddsMap, setOddsMap] = useState<Record<string, MatchOdds>>({});
   const [kickoffTimes, setKickoffTimes] = useState<Record<string, string>>({});
   const [distribution, setDistribution] = useState<Record<string, PickDistribution>>({});
@@ -70,6 +72,14 @@ export default function PicksPage() {
       .then((d) => {
         if (Array.isArray(d?.matches)) setKnockoutMatches(d.matches);
         if (d?.results) setBracketResults(d.results);
+      })
+      .catch(() => {});
+
+    // Pool-wide bracket pick distribution (only populated after the lock).
+    fetch('/api/brackets')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.distribution) setBracketDistribution(d.distribution);
       })
       .catch(() => {});
   }, []);
@@ -584,6 +594,7 @@ export default function PicksPage() {
             results={bracketResults}
             allTeams={ALL_TEAMS}
             r32Teams={bracketR32}
+            distribution={bracketDistribution}
           />
         </div>
       </section>

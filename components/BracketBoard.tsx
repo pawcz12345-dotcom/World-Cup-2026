@@ -93,20 +93,23 @@ function TeamRow({
         picked ? 'bg-wc-blue-50' : ''
       } ${winner ? 'text-wc-green-700' : eliminated ? 'text-gray-400' : 'text-gray-800'}`}
     >
-      <img src={getFlagUrl(meta.flag)} alt={team} className="w-4 h-3 object-cover rounded-sm flex-shrink-0" />
-      <span className={`text-[11px] truncate ${picked ? 'font-bold' : 'font-medium'} ${eliminated ? 'line-through' : ''}`}>
-        {isFinal && picked && '👑 '}{short(team)}
-      </span>
-      {picked && <span className="text-[10px] text-wc-blue-500 font-bold flex-shrink-0">●</span>}
-      {winner && <span className="text-[10px] text-wc-green-600 flex-shrink-0">✓</span>}
-      <span className="ml-auto flex items-center gap-1.5 flex-shrink-0">
-        {scoreText !== null && <span className="text-[11px] font-bold tabular-nums text-gray-700">{scoreText}</span>}
-        {winProb !== null && <span className="text-[10px] text-wc-blue-400 tabular-nums w-7 text-right">{Math.round(winProb * 100)}%</span>}
+      <img src={getFlagUrl(meta.flag)} alt={team} className="w-4 h-3 object-cover rounded-sm flex-shrink-0 self-start mt-0.5" />
+      <div className="min-w-0 flex-1">
+        <span className={`block text-[11px] truncate ${picked ? 'font-bold' : 'font-medium'} ${eliminated ? 'line-through' : ''}`}>
+          {isFinal && picked && '👑 '}{short(team)}
+          {picked && <span className="text-[10px] text-wc-blue-500 font-bold ml-1">●</span>}
+          {winner && <span className="text-[10px] text-wc-green-600 ml-1">✓</span>}
+        </span>
+        {/* Pool pick share, shown under every option. */}
         {distCount !== null && (
-          <span className="text-[10px] text-gray-400 tabular-nums w-7 text-right" title={`${distCount}/${distTotal} entries`}>
-            {pct(distCount, distTotal)}%
+          <span className="block text-[9px] text-gray-400 leading-tight" title={`${distCount}/${distTotal} entries`}>
+            {pct(distCount, distTotal)}% of pool
           </span>
         )}
+      </div>
+      <span className="ml-auto flex items-center gap-1.5 flex-shrink-0 self-start mt-0.5">
+        {scoreText !== null && <span className="text-[11px] font-bold tabular-nums text-gray-700">{scoreText}</span>}
+        {winProb !== null && <span className="text-[10px] text-wc-blue-400 tabular-nums w-7 text-right" title="Win odds">{Math.round(winProb * 100)}%</span>}
       </span>
     </div>
   );

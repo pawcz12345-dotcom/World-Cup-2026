@@ -1,6 +1,7 @@
 'use client';
 
 import { BRACKET_SLOTS, SCORING, getTeamMeta, getFlagUrl } from '@/lib/worldcup-data';
+import type { SlotDistribution } from '@/app/api/brackets/route';
 
 interface KnockoutBracketProps {
   picks: Record<string, string>;
@@ -11,6 +12,18 @@ interface KnockoutBracketProps {
   results?: Record<string, string>;   // round-slot → actual winner, for green/red colouring
   allTeams: string[];
   r32Teams?: Record<number, [string, string]>;
+  distribution?: Record<string, SlotDistribution>; // pool pick % per slot/team
+}
+
+// Pool pick share for a team in a slot, e.g. 43 — shown under every option.
+function pickPctText(
+  distribution: Record<string, SlotDistribution> | undefined,
+  key: string,
+  team: string,
+): string | null {
+  const d = distribution?.[key];
+  if (!d || d.total <= 0) return null;
+  return `${Math.round(((d.teams[team] ?? 0) / d.total) * 100)}% of pool`;
 }
 
 const ROUND_ORDER = ['R32', 'R16', 'QF', 'SF', 'Final'] as const;
@@ -119,8 +132,8 @@ function computeRawSlotTeams(
   return slotTeams;
 }
 
-function TeamButton({ team, isSelected, onClick, disabled }: {
-  team: string; isSelected: boolean; onClick: () => void; disabled: boolean;
+function TeamButton({ team, isSelected, onClick, disabled, pct }: {
+  team: string; isSelected: boolean; onClick: () => void; disabled: boolean; pct?: string | null;
 }) {
   const meta = getTeamMeta(team);
   return (
@@ -142,6 +155,9 @@ function TeamButton({ team, isSelected, onClick, disabled }: {
       <span className={`text-[11px] leading-tight ${isSelected ? 'text-white/60' : 'text-gray-400'}`}>
         #{meta.fifaRank}
       </span>
+      {pct && (
+        <span className={`text-[10px] leading-tight ${isSelected ? 'text-white/70' : 'text-gray-400'}`}>{pct}</span>
+      )}
     </button>
   );
 }
@@ -156,10 +172,12 @@ interface MatchSlotProps {
   locked: boolean;
   r32Labels: Record<number, string>;
   results: Record<string, string>;
+  distribution?: Record<string, SlotDistribution>;
 }
 
-function MatchSlot({ round, slot, effectivePicks, slotTeams, rawPicks, rawSlotTeams, onChange, locked, r32Labels, results }: MatchSlotProps) {
+function MatchSlot({ round, slot, effectivePicks, slotTeams, rawPicks, rawSlotTeams, onChange, locked, r32Labels, results, distribution }: MatchSlotProps) {
   const key = `${round}-${slot}`;
+  const selectedPct = (t: string) => pickPctText(distribution, key, t);
   // Locked slots display the raw stored pick so a valid pick never shows as
   // "Locked" just because the live seeding moved past it.
   const selected = (locked ? rawPicks[key] : effectivePicks[key]) ?? null;
@@ -181,13 +199,18 @@ function MatchSlot({ round, slot, effectivePicks, slotTeams, rawPicks, rawSlotTe
       {locked ? (
         <div className="px-2 py-1.5 flex items-center gap-1.5">
           {selectedMeta && (
-            <img src={getFlagUrl(selectedMeta.flag)} alt={selected!} className="w-4 h-3 object-cover rounded-sm" />
+            <img src={getFlagUrl(selectedMeta.flag)} alt={selected!} className="w-4 h-3 object-cover rounded-sm self-start mt-0.5" />
           )}
-          <span className={`text-[11px] font-semibold ${
-            correct === true ? 'text-wc-green-700' : correct === false ? 'text-wc-red-600' : selected ? 'text-wc-blue-600' : 'text-gray-400'
-          }`}>
-            {selected ? shortBracketName(selected) : 'Locked'}
-          </span>
+          <div className="min-w-0">
+            <span className={`block text-[11px] font-semibold ${
+              correct === true ? 'text-wc-green-700' : correct === false ? 'text-wc-red-600' : selected ? 'text-wc-blue-600' : 'text-gray-400'
+            }`}>
+              {selected ? shortBracketName(selected) : 'Locked'}
+            </span>
+            {selected && selectedPct(selected) && (
+              <span className="block text-[10px] text-gray-400 leading-tight">{selectedPct(selected)}</span>
+            )}
+          </div>
           {correct === true && <span className="text-[11px] text-wc-green-600 ml-auto">✓</span>}
           {correct === false && <span className="text-[11px] text-wc-red-500 ml-auto">✕</span>}
         </div>
@@ -195,17 +218,18 @@ function MatchSlot({ round, slot, effectivePicks, slotTeams, rawPicks, rawSlotTe
         <div className="flex gap-1 p-1">
           {teams.map((team) => (
             <TeamButton key={team} team={team} isSelected={selected === team}
-              onClick={() => onChange(round, slot, team)} disabled={false} />
+              onClick={() => onChange(round, slot, team)} disabled={false} pct={selectedPct(team)} />
           ))}
         </div>
       ) : selected ? (
         <div className="px-2 py-1.5 flex items-center gap-1.5">
           {selectedMeta && (
-            <img src={getFlagUrl(selectedMeta.flag)} alt={selected} className="w-4 h-3 object-cover rounded-sm" />
+            <img src={getFlagUrl(selectedMeta.flag)} alt={selected} className="w-4 h-3 object-cover rounded-sm self-start mt-0.5" />
           )}
           <div>
             <div className="text-wc-blue-600 font-semibold text-[11px]">{shortBracketName(selected)}</div>
             {selectedMeta && <div className="text-gray-400 text-[11px]">#{selectedMeta.fifaRank}</div>}
+            {selectedPct(selected) && <div className="text-gray-400 text-[10px] leading-tight">{selectedPct(selected)}</div>}
           </div>
         </div>
       ) : (
@@ -218,7 +242,7 @@ function MatchSlot({ round, slot, effectivePicks, slotTeams, rawPicks, rawSlotTe
 const LEFT_HALF: Record<string, number[]> = { R32: [0,1,2,3,4,5,6,7], R16: [0,1,2,3], QF: [0,1], SF: [0] };
 const RIGHT_HALF: Record<string, number[]> = { R32: [8,9,10,11,12,13,14,15], R16: [4,5,6,7], QF: [2,3], SF: [1] };
 
-function HalfBracket({ side, effectivePicks, slotTeams, rawPicks, rawSlotTeams, onChange, locked, lockedSlots, r32Labels, results }: {
+function HalfBracket({ side, effectivePicks, slotTeams, rawPicks, rawSlotTeams, onChange, locked, lockedSlots, r32Labels, results, distribution }: {
   side: 'left' | 'right';
   effectivePicks: Record<string, string>;
   slotTeams: Record<string, [string, string]>;
@@ -229,6 +253,7 @@ function HalfBracket({ side, effectivePicks, slotTeams, rawPicks, rawSlotTeams, 
   lockedSlots: Set<string>;
   r32Labels: Record<number, string>;
   results: Record<string, string>;
+  distribution?: Record<string, SlotDistribution>;
 }) {
   const halfMap = side === 'left' ? LEFT_HALF : RIGHT_HALF;
   const rounds = side === 'left'
@@ -250,7 +275,7 @@ function HalfBracket({ side, effectivePicks, slotTeams, rawPicks, rawSlotTeams, 
                 <MatchSlot key={`${round}-${slot}`} round={round} slot={slot}
                   effectivePicks={effectivePicks} slotTeams={slotTeams}
                   rawPicks={rawPicks} rawSlotTeams={rawSlotTeams}
-                  r32Labels={r32Labels} results={results}
+                  r32Labels={r32Labels} results={results} distribution={distribution}
                   onChange={onChange} locked={locked || lockedSlots.has(`${round}-${slot}`)} />
               ))}
             </div>
@@ -261,7 +286,7 @@ function HalfBracket({ side, effectivePicks, slotTeams, rawPicks, rawSlotTeams, 
   );
 }
 
-export default function KnockoutBracket({ picks, onChange, locked, lockedSlots = new Set(), r32Labels = {}, results = {}, allTeams, r32Teams = {} }: KnockoutBracketProps) {
+export default function KnockoutBracket({ picks, onChange, locked, lockedSlots = new Set(), r32Labels = {}, results = {}, allTeams, r32Teams = {}, distribution }: KnockoutBracketProps) {
   const effectivePicks = computeEffectivePicks(picks, r32Teams);
   const slotTeams = computeSlotTeams(effectivePicks, r32Teams);
   const rawSlotTeams = computeRawSlotTeams(picks, r32Teams);
@@ -277,12 +302,16 @@ export default function KnockoutBracket({ picks, onChange, locked, lockedSlots =
   const f2Meta    = finalist2 ? getTeamMeta(finalist2) : null;
   const champMeta = champion  ? getTeamMeta(champion)  : null;
 
+  const f1Pct = finalist1 ? pickPctText(distribution, 'SF-0', finalist1) : null;
+  const f2Pct = finalist2 ? pickPctText(distribution, 'SF-1', finalist2) : null;
+  const champPct = champion ? pickPctText(distribution, 'Final-0', champion) : null;
+
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[1160px] px-2 pb-4">
         <div className="flex items-start gap-2 justify-center">
 
-          <HalfBracket side="left" effectivePicks={effectivePicks} slotTeams={slotTeams} rawPicks={picks} rawSlotTeams={rawSlotTeams} onChange={onChange} locked={locked} lockedSlots={lockedSlots} r32Labels={r32Labels} results={results} />
+          <HalfBracket side="left" effectivePicks={effectivePicks} slotTeams={slotTeams} rawPicks={picks} rawSlotTeams={rawSlotTeams} onChange={onChange} locked={locked} lockedSlots={lockedSlots} r32Labels={r32Labels} results={results} distribution={distribution} />
 
           {/* Center: Final */}
           <div className="flex flex-col items-center justify-center self-stretch" style={{ minWidth: '158px' }}>
@@ -299,7 +328,7 @@ export default function KnockoutBracket({ picks, onChange, locked, lockedSlots =
                   <img src={getFlagUrl(f1Meta.flag)} alt={finalist1!} className="w-6 h-4 object-cover rounded-sm flex-shrink-0" />
                   <div className="min-w-0">
                     <div className="text-gray-900 font-semibold text-xs truncate">{shortBracketName(finalist1!)}</div>
-                    <div className="text-gray-400 text-[11px]">#{f1Meta.fifaRank}</div>
+                    <div className="text-gray-400 text-[11px]">#{f1Meta.fifaRank}{f1Pct ? ` · ${f1Pct}` : ''}</div>
                   </div>
                 </div>
               ) : (
@@ -318,7 +347,7 @@ export default function KnockoutBracket({ picks, onChange, locked, lockedSlots =
                   <img src={getFlagUrl(f2Meta.flag)} alt={finalist2!} className="w-6 h-4 object-cover rounded-sm flex-shrink-0" />
                   <div className="min-w-0">
                     <div className="text-gray-900 font-semibold text-xs truncate">{shortBracketName(finalist2!)}</div>
-                    <div className="text-gray-400 text-[11px]">#{f2Meta.fifaRank}</div>
+                    <div className="text-gray-400 text-[11px]">#{f2Meta.fifaRank}{f2Pct ? ` · ${f2Pct}` : ''}</div>
                   </div>
                 </div>
               ) : (
@@ -338,7 +367,7 @@ export default function KnockoutBracket({ picks, onChange, locked, lockedSlots =
                       <img src={getFlagUrl(champMeta.flag)} alt={champion!} className="w-6 h-4 object-cover rounded-sm" />
                       <div className="text-left">
                         <div className="text-wc-gold-500 font-bold text-xs">{shortBracketName(champion!)}</div>
-                        <div className="text-gray-400 text-[11px]">#{champMeta.fifaRank}</div>
+                        <div className="text-gray-400 text-[11px]">#{champMeta.fifaRank}{champPct ? ` · ${champPct}` : ''}</div>
                       </div>
                     </div>
                   ) : (
@@ -352,7 +381,8 @@ export default function KnockoutBracket({ picks, onChange, locked, lockedSlots =
                   <div className="flex gap-1 p-1">
                     {finalTeams.map((team) => (
                       <TeamButton key={team} team={team} isSelected={champion === team}
-                        onClick={() => onChange('Final', 0, team)} disabled={false} />
+                        onClick={() => onChange('Final', 0, team)} disabled={false}
+                        pct={pickPctText(distribution, 'Final-0', team)} />
                     ))}
                   </div>
                 </div>
@@ -365,7 +395,7 @@ export default function KnockoutBracket({ picks, onChange, locked, lockedSlots =
                       <img src={getFlagUrl(champMeta.flag)} alt={champion!} className="w-5 h-3.5 object-cover rounded-sm" />
                       <div>
                         <div className="text-wc-gold-500 font-bold text-xs">{shortBracketName(champion!)}</div>
-                        <div className="text-gray-400 text-[11px]">#{champMeta.fifaRank}</div>
+                        <div className="text-gray-400 text-[11px]">#{champMeta.fifaRank}{champPct ? ` · ${champPct}` : ''}</div>
                       </div>
                     </div>
                   )}
@@ -386,7 +416,7 @@ export default function KnockoutBracket({ picks, onChange, locked, lockedSlots =
             </div>
           </div>
 
-          <HalfBracket side="right" effectivePicks={effectivePicks} slotTeams={slotTeams} rawPicks={picks} rawSlotTeams={rawSlotTeams} onChange={onChange} locked={locked} lockedSlots={lockedSlots} r32Labels={r32Labels} results={results} />
+          <HalfBracket side="right" effectivePicks={effectivePicks} slotTeams={slotTeams} rawPicks={picks} rawSlotTeams={rawSlotTeams} onChange={onChange} locked={locked} lockedSlots={lockedSlots} r32Labels={r32Labels} results={results} distribution={distribution} />
         </div>
 
         {/* Legend */}
