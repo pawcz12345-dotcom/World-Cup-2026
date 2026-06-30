@@ -71,6 +71,17 @@ export interface ScenariosOptions {
   // slotKey -> team -> win probability (0–1). Used to weight that game instead
   // of a coin flip. Missing slots/teams fall back to an even split.
   edgeProb?: Record<string, Record<string, number>>;
+  // When true, refuse to coin-flip: if any game can't be priced from edgeProb,
+  // throw ScenarioOddsError instead of falling back to an even split.
+  strict?: boolean;
+}
+
+// Thrown in strict mode when a game has no live odds for its participants.
+export class ScenarioOddsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ScenarioOddsError';
+  }
 }
 
 interface SlotNode {
@@ -136,6 +147,7 @@ export function computeWinScenarios(
   const totalEntries = entries.length;
   const edgeProb = opts.edgeProb;
   const weighted = !!edgeProb;
+  const strict = !!opts.strict;
 
   // An entry can only ever finish first if its ceiling reaches the highest
   // *guaranteed* score in the pool — anyone below that is mathematically out.
@@ -152,16 +164,17 @@ export function computeWinScenarios(
     const ep = edgeProb?.[key];
     if (ep) {
       const vals = parts.map((t) => (typeof ep[t] === 'number' ? Math.max(0, ep[t]) : NaN));
-      if (vals.some((v) => !isNaN(v))) {
-        // Two-team slot with one side missing: derive it as the complement.
-        if (vals.length === 2) {
-          if (isNaN(vals[0]) && !isNaN(vals[1])) vals[0] = Math.max(0, 1 - vals[1]);
-          if (isNaN(vals[1]) && !isNaN(vals[0])) vals[1] = Math.max(0, 1 - vals[0]);
-        }
-        const clean = vals.map((v) => (isNaN(v) ? 0 : v));
-        const sum = clean.reduce((a, b) => a + b, 0);
-        if (sum > 0) return clean.map((v) => v / sum);
+      // Need every participant priced to weight the game cleanly.
+      if (vals.every((v) => !isNaN(v))) {
+        const sum = vals.reduce((a, b) => a + b, 0);
+        if (sum > 0) return vals.map((v) => v / sum);
       }
+    }
+    if (strict) {
+      const missing = parts.filter((t) => !(typeof edgeProb?.[key]?.[t] === 'number'));
+      throw new ScenarioOddsError(
+        `No live odds for ${missing.join(' / ') || parts.join(' v ')} at ${key}`,
+      );
     }
     return parts.map(() => 1 / parts.length);
   };

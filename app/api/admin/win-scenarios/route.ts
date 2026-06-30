@@ -8,6 +8,7 @@ import {
 } from '@/lib/scoring';
 import {
   computeWinScenarios,
+  ScenarioOddsError,
   type ScenarioEntryInput,
   type TreeInput,
   type ScenariosResult,
@@ -161,7 +162,23 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const result = computeWinScenarios(tree, entries, { edgeProb });
+  // In odds mode, refuse to coin-flip: if any game can't be priced, error out
+  // (rather than silently mixing in 50/50 guesses) so the admin can fix the slug
+  // or fall back to the combinatorics view deliberately.
+  let result: ScenariosResult;
+  try {
+    result = computeWinScenarios(tree, entries, { edgeProb, strict: useOdds });
+  } catch (e) {
+    if (e instanceof ScenarioOddsError) {
+      const found = Object.entries(futuresResolved).map(([k, v]) => `${k}=${v}`).join(', ') || 'none';
+      return NextResponse.json({
+        error: `Live odds incomplete — ${e.message}. Resolved futures markets: ${found}. ` +
+          `Check the Polymarket slug env vars, or use the 50/50 view.`,
+      });
+    }
+    throw e;
+  }
+
   const body: WinScenariosResponse = { ...result, pendingGroupGames, futuresResolved };
   return NextResponse.json(body);
 }
