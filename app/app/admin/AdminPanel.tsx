@@ -1558,16 +1558,11 @@ function ScenariosTab() {
             </div>
             {data.weighted && (
               <p className="text-[11px] text-wc-blue-600">
-                Live Polymarket odds applied to {data.oddsGames} of {data.branchingGames} undecided game
-                {data.branchingGames !== 1 ? 's' : ''}
-                {data.oddsGames < data.branchingGames
-                  ? ' — any game with no market (head-to-head or futures) stays an even split.'
-                  : '.'}
+                Live Polymarket odds applied to all {data.branchingGames} undecided game
+                {data.branchingGames !== 1 ? 's' : ''} — no coin flips.
                 {(() => {
                   const found = Object.keys(data.futuresResolved ?? {});
-                  return found.length > 0
-                    ? ` Futures markets found: ${found.join(', ')}.`
-                    : ' No futures markets resolved — set the slug env vars to enable deep-round weighting.';
+                  return found.length > 0 ? ` Futures markets: ${found.join(', ')}.` : '';
                 })()}
               </p>
             )}
